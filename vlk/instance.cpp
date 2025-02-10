@@ -59,16 +59,24 @@ Instance::Instance () {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_DECORATED, 0);
 
     // select the last monitor
     GLFWmonitor* fullscreen = NULL;
-    #ifdef FULLSCREEN
+
     int num_monitors;
     GLFWmonitor** glfwmonitors = glfwGetMonitors(&num_monitors);
     fullscreen = glfwmonitors[num_monitors - 1];
-    #endif
 
-    window = glfwCreateWindow(1920, 1080, "Amogug", fullscreen, nullptr);
+    if (num_monitors <= 0) {
+        throw std::runtime_error("no monitors");
+    }
+
+    const GLFWvidmode* mode = glfwGetVideoMode(fullscreen);
+
+    window = glfwCreateWindow(mode->width, mode->height, "Amogug", fullscreen, nullptr);
+
+    glfwSetWindowMonitor(window, fullscreen, 0, 0, mode->width, mode->height, mode->refreshRate);
 
     // get required extensions
     uint32_t glfwExtensionCount = 0;
@@ -87,7 +95,7 @@ Instance::Instance () {
         .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
         .pEngineName = "En Jin",
         .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-        .apiVersion = VK_API_VERSION_1_0,
+        .apiVersion = VK_API_VERSION_1_3,
     };
 
     VkInstanceCreateInfo createInfo {

@@ -9,11 +9,13 @@
     #define HEADER
     #include "instance.cpp"
     #include "queue.cpp"
+    #include "image.cpp"
     #undef HEADER
 #else
     namespace vk {
         class Instance;
         class Queue;
+        class Image;
     };
 #endif
 
@@ -33,6 +35,7 @@ class Device {
     VkSwapchainKHR swapchain;
 
     std::vector<Queue*> queues;
+    std::vector<Image*> swapimages;
 
     void createswapchain();
 
@@ -142,7 +145,8 @@ void Device::init() {
         "VK_LAYER_KHRONOS_validation"
     };
     const std::vector<const char*> deviceExtensions = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        "VK_KHR_dynamic_rendering",
     };
 
     // run through the queues, and fetch their queuefamilies
@@ -165,10 +169,16 @@ void Device::init() {
         qcinfos.push_back(qci);
     }
 
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_render {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
+        .dynamicRendering = VK_TRUE,
+    };
+
     // create the device
     VkPhysicalDeviceFeatures deviceFeatures{};
     VkDeviceCreateInfo createInfo{
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext = &dynamic_render,
         .queueCreateInfoCount = (uint32_t) qcinfos.size(),
         .pQueueCreateInfos = qcinfos.data(),
         .enabledLayerCount = (uint32_t) validationLayers.size(),
@@ -235,9 +245,43 @@ void Device::createswapchain() {
     };
 
     VK_ASSERT( vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapchain) );
+
+    // now, fetch the swapchain images
+    std::vector<VkImage> _swapimages;
+    vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr);
+    _swapimages.resize(imageCount);
+    vkGetSwapchainImagesKHR(device, swapchain, &imageCount, _swapimages.data());
+
+    // and for each image, create a vk::Image
+    for (VkImage i : _swapimages) {
+        Image* img = new Image(*this, i);
+        img->view( VkImageViewCreateInfo {
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = VK_FORMAT_B8G8R8A8_SRGB,
+            .components = {
+                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a = VK_COMPONENT_SWIZZLE_IDENTITY,
+            },
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            }
+        });
+        swapimages.push_back(img);
+    }
 }
 
 Device::~Device () {
+
+    for (Image* i : swapimages) {
+        delete i;
+    }
+
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     vkDestroyDevice(device, nullptr);
 }
