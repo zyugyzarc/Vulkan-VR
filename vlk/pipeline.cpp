@@ -36,13 +36,14 @@ class Pipeline {
     VkPipelineLayout pipelineLayout;
     VkPipeline pipeline;
     VkDescriptorSetLayout desc_layout;
+    VkPipelineBindPoint type;
 
     Pipeline(Device& d) : device(d) {}
     
     void init_graphics(std::vector<VkDescriptorSetLayoutBinding>, std::vector<struct VertexInputBinding>,
                         ShaderModule&, std::vector<VkFormat>, VkFormat, ShaderModule&);
 
-    void init_compute(ShaderModule);
+    void init_compute(ShaderModule&);
 
 public:
 
@@ -54,6 +55,7 @@ public:
         std::vector<VkFormat> attachment_col, VkFormat attachment_depth, ShaderModule& f
     ) {
         Pipeline* p = new Pipeline(d);
+        p->type = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
         p->init_graphics(
             descriptors,
@@ -64,11 +66,15 @@ public:
         return *p;
     };
 
-    static Pipeline& Compute(Device& d, ShaderModule c) {
+    static Pipeline& Compute(Device& d, ShaderModule& c) {
         Pipeline* p = new Pipeline(d);  p->init_compute(c);  return *p;
     };
 
     ~Pipeline();
+
+    // getters
+    operator VkPipeline(){return pipeline;}
+    operator VkPipelineBindPoint(){return type;}
 };
 
 }; // end of instance.h file
@@ -128,9 +134,13 @@ void Pipeline::init_graphics (
         .depthClampEnable = VK_FALSE,
         .polygonMode = VK_POLYGON_MODE_FILL,
         .cullMode = VK_CULL_MODE_NONE,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .depthBiasEnable = VK_FALSE,
+        .depthBiasConstantFactor = 0.0f,
+        .depthBiasClamp = 0.0f,
+        .depthBiasSlopeFactor = 0.0f,
         .lineWidth = 1.0f,
-    };
+   };
 
     VkPipelineMultisampleStateCreateInfo multisampling {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -138,14 +148,30 @@ void Pipeline::init_graphics (
         .sampleShadingEnable = VK_FALSE,
     };
 
+
+    // wow i forgot about this part
     VkPipelineColorBlendAttachmentState colorBlendAttachment {
-        .blendEnable = VK_FALSE,
+        .blendEnable = VK_TRUE,
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp = VK_BLEND_OP_ADD,
         .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
     };
+    
+    std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments;
+    for (int i = 0; i < attachment_col.size(); i++) {
+        colorBlendAttachments.push_back(colorBlendAttachment);
+    }
 
     VkPipelineColorBlendStateCreateInfo colorBlending {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
         .logicOpEnable = VK_FALSE,
+        .logicOp = VK_LOGIC_OP_COPY,
+        .attachmentCount = (uint32_t) colorBlendAttachments.size(),
+        .pAttachments = colorBlendAttachments.data(),
     };
 
     // load shadermodules
@@ -186,12 +212,20 @@ void Pipeline::init_graphics (
     };
 
     VK_ASSERT( vkCreateDescriptorSetLayout(device, &descset, nullptr, &desc_layout) );
+    
+    // DEBUG
+    
+    // VkPipelineLayoutCreateInfo pipelineLayoutInfo {
+    //     .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+    //     .setLayoutCount = 1,
+    //     .pSetLayouts = &desc_layout,
+    // };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = &desc_layout,
+        .setLayoutCount = 0,
     };
+
     VK_ASSERT( vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) );
 
     // the part where you add vertex inputs
@@ -241,7 +275,7 @@ void Pipeline::init_graphics (
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable = attachment_depth == VK_FORMAT_UNDEFINED ? VK_FALSE : VK_TRUE,
         .depthWriteEnable = attachment_depth == VK_FORMAT_UNDEFINED ? VK_FALSE : VK_TRUE,
-        .depthCompareOp = VK_COMPARE_OP_LESS,
+        .depthCompareOp = attachment_depth == VK_FORMAT_UNDEFINED ? VK_COMPARE_OP_ALWAYS : VK_COMPARE_OP_LESS,
         .depthBoundsTestEnable = VK_FALSE,
         .stencilTestEnable = VK_FALSE
     };
@@ -249,7 +283,7 @@ void Pipeline::init_graphics (
     // finally, create the pipeline
     VkGraphicsPipelineCreateInfo pipelineInfo {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext = nullptr,
+        .pNext = &pipeline_rendering_create_info,
         .stageCount = 2,
         .pStages = shaderStages,
         .pVertexInputState = &vertexInputInfo,
@@ -266,7 +300,7 @@ void Pipeline::init_graphics (
     vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline);
 }
 
-void Pipeline::init_compute (ShaderModule c) {
+void Pipeline::init_compute (ShaderModule& c) {
     // todo
 }
 

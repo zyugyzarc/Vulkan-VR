@@ -35,6 +35,7 @@ public:
     void view(VkImageViewCreateInfo);
     void view(VkImageViewCreateInfo, bool);
 
+    operator VkImage() {return image;}
     operator VkImageView() {return imview;}
 };
 
@@ -68,6 +69,9 @@ void Image::view (VkImageViewCreateInfo v, bool keep_prev) {
 
     v.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     v.image = image;
+
+    v.subresourceRange.levelCount = v.subresourceRange.levelCount == 0 ? 1 : v.subresourceRange.levelCount;
+    v.subresourceRange.layerCount = v.subresourceRange.layerCount == 0 ? 1 : v.subresourceRange.layerCount;
 
     VK_ASSERT( vkCreateImageView(device, &v, nullptr, &imview) );
 }

@@ -36,9 +36,13 @@ class Device {
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device;
     VkSwapchainKHR swapchain;
+    uint32_t swapindex;
 
     std::vector<Queue*> queues;
     std::vector<Image*> swapimages;
+
+    std::vector<VkSemaphore> sems;
+    std::vector<VkFence> fences;
 
     void createswapchain();
 
@@ -53,9 +57,26 @@ public:
     // the queue is invalid until Device::init() is called.
     Queue& create_queue(uint32_t);
 
+    // gets the next available image in the swapchain
+    // can signal semaphore or fence when the image is available
+    Image& getSwapchainImage(VkFence, VkSemaphore);
+
+    // creates a semaphore
+    VkSemaphore semaphore();
+
+    // creates a fence
+    VkFence fence();
+
+    // waits for a fence
+    void wait(VkFence);
+
+    // waits till the device is done with everything
+    void idle() {vkDeviceWaitIdle(device);};
+
     // getters
     operator VkDevice() {return device;};
     operator VkSwapchainKHR() {return swapchain;};
+    uint32_t _swapimage_index() {return swapindex;};
 };
 
 }; // end of device.h file
@@ -280,11 +301,45 @@ void Device::createswapchain() {
     }
 }
 
+Image& Device::getSwapchainImage (VkFence f, VkSemaphore s) {
+    vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, s, f, &swapindex);
+    return *swapimages[swapindex];
+}
+
+VkSemaphore Device::semaphore() {
+    VkSemaphoreCreateInfo i {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+    VkSemaphore s;
+    VK_ASSERT( vkCreateSemaphore(device, &i, nullptr, &s) );
+    sems.push_back(s);
+    return s;
+}
+
+VkFence Device::fence() {
+    VkFenceCreateInfo i {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    VkFence s;
+    VK_ASSERT( vkCreateFence(device, &i, nullptr, &s) );
+    fences.push_back(s);
+    return s;
+}
+
+void Device::wait (VkFence f) {
+    vkWaitForFences(device, 1, &f, VK_TRUE, UINT64_MAX);
+    vkResetFences(device, 1, &f);
+}
+
 // Destructor.
 Device::~Device () {
 
     for (Image* i : swapimages) {
         delete i;
+    }
+
+    for (auto i : sems) {
+        vkDestroySemaphore(device, i, nullptr);
+    }
+
+    for (auto i : fences) {
+        vkDestroyFence(device, i, nullptr);
     }
 
     vkDestroySwapchainKHR(device, swapchain, nullptr);

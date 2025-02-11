@@ -8,10 +8,14 @@
 #ifndef HEADER
     #define HEADER
     #include "device.cpp"
+    #include "commandbuffer.cpp"
+    #include "image.cpp"
     #undef HEADER
 #else
     namespace vk {
         class Device;
+        class CommandBuffer;
+        class Image;
     };
 #endif
 
@@ -29,6 +33,7 @@ class Queue {
 
     VkCommandPool cmdPool;
     std::vector<VkCommandBuffer> cmdbufs;
+    std::vector<CommandBuffer*> cmdbufs_wrap;
     uint32_t curr_cmdbuf = 0;
 
     friend class Device;
@@ -36,8 +41,14 @@ class Queue {
     Queue(Device&, uint32_t);
 
 public:
-    ~Queue();
+    ~Queue();   
+
+    CommandBuffer& command();
+    void submit(VkFence, std::vector<VkSemaphore>, std::vector<VkPipelineStageFlags>, std::vector<VkSemaphore>);
+    void present(Image&, std::vector<VkSemaphore>);
+
 };
+
 
 }; // end of instance.h file
 #ifndef HEADER
@@ -89,6 +100,58 @@ void Queue::init () {
     };
 
     VK_ASSERT( vkAllocateCommandBuffers(dev, &allocInfo, cmdbufs.data()) );
+
+    for (auto i : cmdbufs) {
+        cmdbufs_wrap.push_back(new CommandBuffer(i));
+    }
+}
+
+// return the active command buffer. The command buffer cycles when submit() is called.
+CommandBuffer& Queue::command() {
+    return *cmdbufs_wrap[curr_cmdbuf];
+}
+
+
+// submits the active CommandBuffer, and cycles the ring of commandbuffers
+// fence - fence is signaled when the operation is complete
+// waitsems - semaphores to wait on before starting the operation
+// waitstages - stages to wait at on the waitsems
+// signalsems - semaphores to signal once operation is complete
+void Queue::submit(VkFence f, std::vector<VkSemaphore> waitsem, std::vector<VkPipelineStageFlags> waitstage, std::vector<VkSemaphore> signalsem) {
+
+    VkSubmitInfo submit_info {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount = (uint32_t) waitsem.size(),
+        .pWaitSemaphores = waitsem.data(),
+        .pWaitDstStageMask = waitstage.data(),
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmdbufs[curr_cmdbuf],
+        .signalSemaphoreCount = (uint32_t) signalsem.size(),
+        .pSignalSemaphores = signalsem.data()
+    };
+
+    VK_ASSERT( vkQueueSubmit(queue, 1, &submit_info, f));
+}
+
+// submits the image fetched by `Device::getSwapchainImage()` to the 
+// presentation engine. Optionally takes in the image itself.
+// waitsems - semaphores to wait on before starting the operation
+void Queue::present(Image& _, std::vector<VkSemaphore> waitsem) {
+
+    VkSwapchainKHR swap = (VkSwapchainKHR)dev;
+    uint32_t imageindex = dev._swapimage_index();
+
+    VkPresentInfoKHR present {
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = (uint32_t) waitsem.size(),
+        .pWaitSemaphores = waitsem.data(),
+        .swapchainCount = 1,
+        .pSwapchains = &swap,
+        .pImageIndices = &imageindex,
+        .pResults = nullptr
+    };
+
+    vkQueuePresentKHR(queue, &present);
 }
 
 // destructor

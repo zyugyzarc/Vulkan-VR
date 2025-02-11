@@ -65,19 +65,23 @@ Instance::Instance () {
     // select the last monitor
     GLFWmonitor* fullscreen = NULL;
 
-    int num_monitors;
-    GLFWmonitor** glfwmonitors = glfwGetMonitors(&num_monitors);
-    fullscreen = glfwmonitors[num_monitors - 1];
+    // int num_monitors;
+    // GLFWmonitor** glfwmonitors = glfwGetMonitors(&num_monitors);
+    // fullscreen = glfwmonitors[num_monitors - 1];
 
-    if (num_monitors <= 0) {
-        throw std::runtime_error("no monitors");
-    }
+    // if (num_monitors <= 0) {
+    //     throw std::runtime_error("no monitors");
+    // }
 
-    const GLFWvidmode* mode = glfwGetVideoMode(fullscreen);
+    // const GLFWvidmode* mode = glfwGetVideoMode(fullscreen);
 
-    window = glfwCreateWindow(mode->width, mode->height, "Amogug", fullscreen, nullptr);
+    const int width = 2560, height = 1440;
 
-    glfwSetWindowMonitor(window, fullscreen, 0, 0, mode->width, mode->height, mode->refreshRate);
+    window = glfwCreateWindow(width, height, "Amogug", fullscreen, nullptr);
+
+    // glfwSetWindowMonitor(window, fullscreen, 0, 0, mode->width, mode->height, mode->refreshRate);
+    
+    printf("Created VkEngine window (%dx%d)\n", width, height);
 
     // get required extensions
     uint32_t glfwExtensionCount = 0;

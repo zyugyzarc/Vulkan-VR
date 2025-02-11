@@ -92,7 +92,7 @@ ShaderModule::ShaderModule(Device& d, std::string filename, std::string code) : 
     glfile.close();
 
     if ( 0 != 
-        system(("./shaders/glslc \"shaders/" + filename + "\" -o \"shaders/" + filename + ".spv\"").c_str())
+        system(("./shaders/glslc -g \"shaders/" + filename + "\" -o \"shaders/" + filename + ".spv\"").c_str())
     ) {
         throw std::runtime_error("shader compile failed");
     }

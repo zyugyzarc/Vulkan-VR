@@ -1,5 +1,5 @@
 
-// #define HEADER
+// include -DHEADER when compiling with gcc
 #include <iostream>
 #include <vector>
 #include "instance.cpp"
@@ -8,4 +8,5 @@
 #include "shadermodule.cpp"
 #include "image.cpp"
 #include "pipeline.cpp"
+#include "commandbuffer.cpp"
 
