@@ -20,16 +20,22 @@
 namespace vk {
 
 // represents a Shader.
+// a shader can be a vert shader, a frag shader or a comp shader
+// 
 class ShaderModule {
 
     Device& device;
     VkShaderModule module;
+    VkShaderStageFlagBits type;
+
 public:
     
     #define SHADERCODE(...) #__VA_ARGS__
 
     ShaderModule(Device& d, std::string filename, std::string code);
     ~ShaderModule();
+
+    operator VkShaderModule() const {return module;}
 };
 
 }; // end of instance.h file
@@ -54,14 +60,38 @@ inline void _VkAssert (VkResult res, std::string file, int line) {
     );
 }
 
+// helper -- check if `a` endswith `b`
+static bool endswith (const std::string a, const std::string b) {
+
+    if (a.size() < b.size()) return false;
+    char* p = (char*) a.c_str();
+    p += a.size() - b.size();
+    std::string suffix(p);
+    return p == b;
+}
+
+// helper structs to pass in args
+
+
 ShaderModule::ShaderModule(Device& d, std::string filename, std::string code) : device(d) {
 
+    if (endswith(filename, ".vert")){
+        this->type = VK_SHADER_STAGE_VERTEX_BIT;
+    }
+    else if (endswith(filename, ".frag")){
+        this->type = VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
+    else if (endswith(filename, ".comp")){
+        this->type = VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+
     std::ofstream glfile("shaders/" + filename, std::ios::out);
+    glfile << "#version 450\n";
     glfile << code;
     glfile.close();
 
     if ( 0 != 
-        system(("./shaders/glslc \"" + filename + "\" -o \"" + filename + ".spv\"").c_str())
+        system(("./shaders/glslc \"shaders/" + filename + "\" -o \"shaders/" + filename + ".spv\"").c_str())
     ) {
         throw std::runtime_error("shader compile failed");
     }

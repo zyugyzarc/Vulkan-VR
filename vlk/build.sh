@@ -7,6 +7,7 @@ g++ $CFLAGS -c -o device.o device.cpp
 g++ $CFLAGS -c -o queue.o queue.cpp
 g++ $CFLAGS -c -o image.o image.cpp
 g++ $CFLAGS -c -o shadermodule.o shadermodule.cpp
-g++ $CFLAGS -o vkdemo vkdemo.o instance.o device.o queue.o image.o shadermodule.o $LDFLAGS
+g++ $CFLAGS -c -o pipeline.o pipeline.cpp
+g++ $CFLAGS -o vkdemo vkdemo.o instance.o device.o queue.o image.o shadermodule.o pipeline.o $LDFLAGS
 
 rm *.o
