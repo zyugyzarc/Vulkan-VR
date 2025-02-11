@@ -16,7 +16,10 @@
 
 namespace vk {
 
-// represents a VkImage.
+// Represents a VkImage.
+// Currently wraps a VkImage, and allows a
+// VkImageView to ve created from it.
+// [!!] Currently, does not own the VkImage
 class Image {
 
     Device& device;
@@ -74,7 +77,6 @@ Image::~Image () {
         vkDestroyImageView((VkDevice) device, imview, nullptr);
     }
 }
-
 
 };
 #endif

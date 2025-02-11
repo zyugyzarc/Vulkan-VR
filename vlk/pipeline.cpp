@@ -26,7 +26,7 @@ struct VertexInputBinding {
     std::vector<VkVertexInputAttributeDescription> attr;
 };
 
-// represents a pipeline
+// Represents a pipeline
 // A pipeline either holds a vert shader and a frag shader or
 // holds a compute shader.
 // A pipeline should be able to "bind" to descriptors and attachments.
@@ -46,6 +46,7 @@ class Pipeline {
 
 public:
 
+    // Factory function - Graphics: Creates a graphics pipeline with the given parameters
     static Pipeline& Graphics(
         Device& d,
         std::vector<VkDescriptorSetLayoutBinding> descriptors,
@@ -90,7 +91,7 @@ inline void _VkAssert (VkResult res, std::string file, int line) {
     );
 }
 
-// void Pipeline::init_graphics(ShaderModule vert, ShaderModule frag) {
+// helper function used by the factory function / named constructor
 void Pipeline::init_graphics (
     std::vector<VkDescriptorSetLayoutBinding> descriptors,
     std::vector<struct VertexInputBinding> vertex_input, ShaderModule& vert,
@@ -147,6 +148,8 @@ void Pipeline::init_graphics (
         .logicOpEnable = VK_FALSE,
     };
 
+    // load shadermodules
+
     VkPipelineShaderStageCreateInfo vert_st {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_VERTEX_BIT,
@@ -162,6 +165,7 @@ void Pipeline::init_graphics (
     };
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {vert_st, frag_st};
+
     // end defaults
 
     // the part where you add descriptors
@@ -266,6 +270,7 @@ void Pipeline::init_compute (ShaderModule c) {
     // todo
 }
 
+// destructor
 Pipeline::~Pipeline() {
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
     vkDestroyDescriptorSetLayout(device, desc_layout, nullptr);

@@ -17,8 +17,10 @@
 
 namespace vk {
 
-// a queue wraps a VkQueue
-// also can create command buffers
+// A queue wraps a VkQueue, and
+// abstract CommandPools and CommandBuffers.
+// A Queue is constructed from Device::create_queue()
+// and is "valid" when Device::init() is called.
 class Queue {
 
     uint32_t family;
@@ -57,8 +59,12 @@ inline void _VkAssert (VkResult res, std::string file, int line) {
     );
 }
 
+// constructor - everything is late initalization in Queue::init()
 Queue::Queue (Device& d, uint32_t qf) : dev(d), family(qf) {}
 
+// initalizes the queue -- fetches the correct VkQueue, sets up
+// a command pool and a ring of command buffers.
+// automatically called by Device::init()
 void Queue::init () {
     // get the queue
     vkGetDeviceQueue((VkDevice) dev, family, 0, &queue);
@@ -85,6 +91,7 @@ void Queue::init () {
     VK_ASSERT( vkAllocateCommandBuffers(dev, &allocInfo, cmdbufs.data()) );
 }
 
+// destructor
 Queue::~Queue () {
     vkDestroyCommandPool(dev, cmdPool, nullptr);
 }

@@ -6,9 +6,10 @@
 
 namespace vk {
 
-// an Instance wraps a VkInstance, a GLFWWindow and a Surface.
-// upon initialization, automatically creates a GLFWwindow and a
-// VkInstance.
+// A vk::Instance wraps a VkInstance, a GLFWWindow and a VkSurfaceKHR.
+// Upon initiazation, automatically constructs the required resources.
+// (tries to) Open the window in fullscreen, on the last (secondary) monitor,
+// with no window decoration.
 class Instance {
 
     GLFWwindow* window;
@@ -21,7 +22,7 @@ public:
     ~Instance();
 
     // updates the screen:
-    //  - polls GLFW events and handles window events
+    // polls GLFW events and handles window events
     bool update();
 
     // getters
@@ -114,7 +115,7 @@ Instance::Instance () {
 }
 
 
-// updates the window. returns false when the window is closed.
+// updates the window. returns false when the window needs to close.
 bool Instance::update () {
     glfwPollEvents();
     return !glfwWindowShouldClose(window);

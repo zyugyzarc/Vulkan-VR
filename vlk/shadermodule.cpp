@@ -19,9 +19,12 @@
 
 namespace vk {
 
-// represents a Shader.
-// a shader can be a vert shader, a frag shader or a comp shader
-// 
+// Represents a Shader.
+// A shader can be a vert shader, a frag shader or a comp shader.
+// Wraps a VkShaderModule.
+// Upon construction with a filename and code, automatically
+// puts the code in the file, compiles it with glslc, and 
+// loads the spv into the shadermodule.
 class ShaderModule {
 
     Device& device;
@@ -70,9 +73,7 @@ static bool endswith (const std::string a, const std::string b) {
     return p == b;
 }
 
-// helper structs to pass in args
-
-
+// Constructor - compiles a given shader program using glslc and creates a shadermodule
 ShaderModule::ShaderModule(Device& d, std::string filename, std::string code) : device(d) {
 
     if (endswith(filename, ".vert")){
@@ -113,6 +114,7 @@ ShaderModule::ShaderModule(Device& d, std::string filename, std::string code) : 
     vkCreateShaderModule(device, &createInfo, nullptr, &module);
 }
 
+// destructor
 ShaderModule::~ShaderModule () {
     vkDestroyShaderModule(device, module, nullptr);
 }

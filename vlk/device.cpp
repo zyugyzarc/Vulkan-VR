@@ -19,14 +19,17 @@
     };
 #endif
 
+// additional flag to the VkQueueFlagBits, to signal presentation support
 // https://registry.khronos.org/vulkan/specs/latest/man/html/VkQueueFlagBits.html
 #define VK_QUEUE_PRESENTATION_BIT 0x200
 
 namespace vk {
 
-// a Device wraps a physical device and a VkDevice, and a VkSwapchainKHR.
-// also allows you to create a Queue, using create_queue.
-//
+// A vk::Device wraps a physical device and a VkDevice, and a VkSwapchainKHR.
+// Also allows you to create Queues using Device::create_queue().
+// The device is initialized and ready when Device::init() is called.
+// Assumes the extensions VK_KHR_SWAPCHAIN_EXTENSION_NAME and VK_KHR_dynamic_rendering
+// are available, and loads them.
 class Device {
 
     const Instance& instance;
@@ -99,10 +102,10 @@ Device::Device (const Instance& instance) : instance(instance) {
     device = NULL;
 }
 
-/**
- * Creates a Queue with the specified flags. To be called before
- * calling Device::init().
- */
+
+// Creates a Queue with the specified flags. The Queue is active
+// and usuable after Device::init() is called.
+// This function should be called before Device::init().
 Queue& Device::create_queue(uint32_t flags) {
 
     // fetch the available queuefamilies
@@ -135,10 +138,8 @@ Queue& Device::create_queue(uint32_t flags) {
     return *ret;
 }
 
-/**
- * Starts up the device, by creating a VkDevice, and initializing all
- * queues created with create_queue
- */
+// Starts up the device, by creating a VkDevice, and initializing all
+// queues created with Device::create_queue()
 void Device::init() {
 
     // validation layers
@@ -200,9 +201,11 @@ void Device::init() {
     createswapchain();
 }
 
-/**
- * Creates and initalizes the swapchain
- */
+// Creates and initalizes the swapchain
+// hardcoded to use 32-bit SRGB (VK_FORMAT_B8G8R8A8_SRGB),
+// VK_PRESENT_MODE_MAILBOX_KHR (not always available), and
+// VK_COLOR_SPACE_SRGB_NONLINEAR_KHR.
+// Also assumes that the image sharing mode is VK_SHARING_MODE_EXCLUSIVE.
 void Device::createswapchain() {
 
     // get the swapchain capabilities
@@ -235,7 +238,7 @@ void Device::createswapchain() {
         .imageFormat = format.format,
         .imageColorSpace = format.colorSpace,
         .imageExtent = extent,
-        .imageArrayLayers = 1, // TODO: set to 2 for multi-view rendering
+        .imageArrayLayers = 1,
         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE, // pretend that the graphics and present queue will be the same
         .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
@@ -277,6 +280,7 @@ void Device::createswapchain() {
     }
 }
 
+// Destructor.
 Device::~Device () {
 
     for (Image* i : swapimages) {
