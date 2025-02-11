@@ -52,6 +52,7 @@ public:
 
     // getters
     operator VkDevice() {return device;};
+    operator VkSwapchainKHR() {return swapchain;};
 };
 
 }; // end of device.h file
