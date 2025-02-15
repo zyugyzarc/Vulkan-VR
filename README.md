@@ -22,3 +22,10 @@
 - Make a simple obj parser/loader
 - figure out a way to get opencv camera image to a vulkan texture
 - figure out a way to get midas (midas cpp?) to pass a depth image into a vulkan texture
+
+# Project structure
+
+- vk - Vulkan wrapped Base API
+- sc - Mesh/Object/Scene management API
+- assets - assets and files
+- .util - utilities: glslc
