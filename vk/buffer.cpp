@@ -10,11 +10,10 @@
 #ifndef HEADER
     #define HEADER
     #include "device.cpp"
+    #include "commandbuffer.cpp"
     #undef HEADER
 #else
-    namespace vk {
-        class Device;
-    };
+    #include "commandbuffer.cpp"
 #endif
 
 namespace vk {
@@ -34,6 +33,7 @@ class Buffer {
     VkDeviceMemory memory;
     uint32_t size;
 
+    void _copy_from_buffer(Buffer&);
 public:
     Buffer(Device&, VkBufferUsageFlags, VkMemoryPropertyFlags, uint32_t);
     ~Buffer();
@@ -44,8 +44,12 @@ public:
     template <typename func_t>
     void mapped(func_t);
 
+    template <typename func_t>
+    void staged(func_t);
+
     //getters
     operator VkBuffer() {return buffer;}
+    uint32_t getsize() {return size;}
 };
 
 // creates a contextmanager for
@@ -56,6 +60,19 @@ void Buffer::mapped(func_t func) {
     void* ptr = map();
     func(ptr);
     unmap(ptr);
+}
+
+// creates a staging buffer, maps it and returns
+// a void* to the mapped memory (in func). copies
+// the staging buffer and deletes it after.
+template <typename func_t>
+void Buffer::staged(func_t func) {
+
+    Buffer* b = new Buffer(device, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, size);
+    b->mapped(func);
+    _copy_from_buffer(*b);
+    delete b;
 }
 
 }; // end of instance.h file
@@ -123,6 +140,10 @@ found_heap_index:
     VK_ASSERT( vkAllocateMemory(device, &allocInfo, nullptr, &memory) );
 
     vkBindBufferMemory(device, buffer, memory, 0);
+}
+
+void Buffer::_copy_from_buffer(Buffer& b) {
+    device._copybuffer(b, *this);
 }
 
 // maps the memory held by this buffer

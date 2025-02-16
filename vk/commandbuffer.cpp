@@ -69,6 +69,9 @@ public:
         VkImageLayout, VkPipelineStageFlags, VkAccessFlags,
         VkImageAspectFlags
     );
+
+    // getters
+    operator VkCommandBuffer() {return cmd;}
 };
 
 

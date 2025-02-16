@@ -1,4 +1,5 @@
 #include "vk/vklib.h"
+#include "sc/scenes.h"
 
 #include <iostream>
 #include <string>
@@ -49,6 +50,8 @@ int main() {
 
     dev.init();  // initialize the device
 
+    sc::Mesh& myobj = *new sc::Mesh(dev, "suzane.obj");
+
     // create shader modules from above
     vk::ShaderModule& vert = *new vk::ShaderModule(dev, "_shader.vert", vert_shadercode);
     vk::ShaderModule& frag = *new vk::ShaderModule(dev, "_shader.frag", frag_shadercode);
@@ -88,6 +91,8 @@ int main() {
     VkSemaphore sem_img_avail = dev.semaphore();
     VkSemaphore sem_render_finish = dev.semaphore();
     VkFence fence_wait_frame = dev.fence();
+
+     goto _end;
 
     while (instance.update()) {
 
@@ -161,6 +166,8 @@ int main() {
         dev.wait(fence_wait_frame);
     }
 
+    _end:
+
     dev.idle();
 
     // cleanup
@@ -173,6 +180,8 @@ int main() {
     delete &presentation;
 
     delete &vertbuffer;
+
+    delete &myobj;
     
     delete &dev;
     delete &instance;

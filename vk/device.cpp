@@ -10,12 +10,14 @@
     #include "instance.cpp"
     #include "queue.cpp"
     #include "image.cpp"
+    #include "buffer.cpp"
     #undef HEADER
 #else
     namespace vk {
         class Instance;
         class Queue;
         class Image;
+        class Buffer;
     };
 #endif
 
@@ -47,6 +49,8 @@ class Device {
 
     void createswapchain();
 
+    Queue* _stagerq;
+
 public:
     // sole constructor
     Device(const Instance&);
@@ -73,6 +77,9 @@ public:
 
     // waits till the device is done with everything
     void idle() {vkDeviceWaitIdle(device);};
+
+    // helpers:
+    void _copybuffer(Buffer& src, Buffer& dst);
 
     // getters
     operator VkPhysicalDevice() const {return physicalDevice;};
@@ -124,6 +131,9 @@ Device::Device (const Instance& instance) : instance(instance) {
 
     // set null for late initialization
     device = NULL;
+
+    // create a stager queue for internal use (_copybuffer)
+    _stagerq = &create_queue(VK_QUEUE_TRANSFER_BIT);
 }
 
 
@@ -312,6 +322,15 @@ void Device::createswapchain() {
     }
 }
 
+// helper function to copy a buffer. called by Buffer::staged()
+void Device::_copybuffer (Buffer& src, Buffer& dst) {
+    _stagerq->command() << [&](CommandBuffer& cmd) {
+        VkBufferCopy copyRegion {.size = src.getsize()};
+        vkCmdCopyBuffer((VkCommandBuffer) cmd, src, dst, 1, &copyRegion);
+    };
+    _stagerq->submit(VK_NULL_HANDLE, {}, {}, {});
+}
+
 Image& Device::getSwapchainImage (VkFence f, VkSemaphore s) {
     vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, s, f, &swapindex);
     return *swapimages[swapindex];
@@ -340,6 +359,8 @@ void Device::wait (VkFence f) {
 
 // Destructor.
 Device::~Device () {
+
+    delete _stagerq;
 
     for (Image* i : swapimages) {
         delete i;
