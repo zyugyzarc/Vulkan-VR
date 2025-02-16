@@ -9,11 +9,13 @@
     #define HEADER
     #include "device.cpp"
     #include "shadermodule.cpp"
+    #include "buffer.cpp"
     #undef HEADER
 #else
     namespace vk {
         class Device;
         class ShaderModule;
+        class Buffer;
     };
 #endif
 
@@ -37,6 +39,10 @@ class Pipeline {
     VkPipeline pipeline;
     VkDescriptorSetLayout desc_layout;
     VkPipelineBindPoint type;
+
+    VkDescriptorPool descriptorPool;
+    std::vector<VkDescriptorSet> descsets;
+    uint32_t descset_index = 0;
 
     Pipeline(Device& d) : device(d) {}
     
@@ -70,10 +76,17 @@ public:
         Pipeline* p = new Pipeline(d);  p->init_compute(c);  return *p;
     };
 
+    // return the current descriptor set
+    VkDescriptorSet _getdescset();
+
+    void flushDescriptors();
+    void writeDescriptor(uint32_t, Buffer&, VkDescriptorType);
+
     ~Pipeline();
 
     // getters
     operator VkPipeline(){return pipeline;}
+    operator VkPipelineLayout(){return pipelineLayout;}
     operator VkPipelineBindPoint(){return type;}
 };
 
@@ -212,18 +225,11 @@ void Pipeline::init_graphics (
     };
 
     VK_ASSERT( vkCreateDescriptorSetLayout(device, &descset, nullptr, &desc_layout) );
-    
-    // DEBUG
-    
-    // VkPipelineLayoutCreateInfo pipelineLayoutInfo {
-    //     .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-    //     .setLayoutCount = 1,
-    //     .pSetLayouts = &desc_layout,
-    // };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 0,
+        .setLayoutCount = 1,
+        .pSetLayouts = &desc_layout
     };
 
     VK_ASSERT( vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) );
@@ -298,14 +304,88 @@ void Pipeline::init_graphics (
     };
 
     vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline);
+
+    // we're not done yet, gotta create descriptor-resources
+    
+    // we'll need a pool-size for each type of descriptor.
+
+    std::vector<VkDescriptorPoolSize> poolsizes;
+    for (VkDescriptorSetLayoutBinding i: descriptors) {
+        poolsizes.push_back({
+            .type = i.descriptorType,
+            .descriptorCount = 8 // allocate 8 of each
+        });
+    }
+
+    VkDescriptorPoolCreateInfo poolInfo {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = 8,
+        .poolSizeCount = (uint32_t) poolsizes.size(),
+        .pPoolSizes = poolsizes.data(),
+    };
+
+    VK_ASSERT( vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) );
+
+    // allocate the desc sets now
+    // allocate 8 descriptor sets to cycle through
+
+    std::vector<VkDescriptorSetLayout> layouts(8, desc_layout);
+    VkDescriptorSetAllocateInfo allocInfo {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = descriptorPool,
+        .descriptorSetCount = 8,
+        .pSetLayouts = layouts.data(),
+    };
+
+    descsets.resize(8);
+    VK_ASSERT( vkAllocateDescriptorSets(device, &allocInfo, descsets.data()) );
 }
 
 void Pipeline::init_compute (ShaderModule& c) {
     // todo
 }
 
+void Pipeline::flushDescriptors() {
+    // we dont actually flush them
+    // just cycle the current desc set we use
+    // in the future, we'll need to have 3 descriptor sets for efficient usage:
+    // - per frame
+    // - per object
+    // - per material
+    // today is not that day
+
+    descset_index = (descset_index + 1) % 8;
+}
+
+VkDescriptorSet Pipeline::_getdescset() {
+    return descsets[descset_index];
+}
+
+// write the given buffer to the descriptor at` binding`
+void Pipeline::writeDescriptor(uint32_t binding, Buffer& buffer, VkDescriptorType buftype) {
+
+    VkDescriptorBufferInfo bufferInfo {
+        .buffer = (VkBuffer) buffer,
+        .offset = 0,
+        .range = VK_WHOLE_SIZE,
+    };
+
+    VkWriteDescriptorSet descriptorWrite {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = descsets[descset_index],
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = buftype,
+        .pBufferInfo = &bufferInfo
+    };
+
+    vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+}
+
 // destructor
 Pipeline::~Pipeline() {
+    vkDestroyDescriptorPool(device, descriptorPool, nullptr);
     vkDestroyPipeline(device, pipeline, nullptr);
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
     vkDestroyDescriptorSetLayout(device, desc_layout, nullptr);

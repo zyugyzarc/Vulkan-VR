@@ -27,10 +27,15 @@ class Mesh {
 
     vk::Buffer* verts;
     vk::Buffer* idx;
+    uint32_t nverts;
+    uint32_t nidx;
 
 public:
     Mesh(vk::Device&, std::string);
     ~Mesh();
+
+    void bind(vk::CommandBuffer&);
+    void draw(vk::CommandBuffer&);
 
 };
 
@@ -97,6 +102,11 @@ Mesh::Mesh (vk::Device& device, std::string filename) {
                 objfile >> std::get<1>(fv);
                 objfile >> std::get<2>(fv);
 
+                // obj files are 1-indexed
+                std::get<0>(fv)--;
+                std::get<1>(fv)--;
+                std::get<2>(fv)--;
+
                 // check if we already made this vertex
                 if (tmp_idx.contains(fv)) {
                     // just add that index to the idx buffer
@@ -116,6 +126,9 @@ Mesh::Mesh (vk::Device& device, std::string filename) {
         }
     }
 
+    nverts = _verts.size();
+    nidx = _idx.size();
+
     // create the buffers -- for now, they're host visible
     verts = new vk::Buffer(device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _verts.size() * sizeof(Vertex));
@@ -133,6 +146,19 @@ Mesh::Mesh (vk::Device& device, std::string filename) {
     });
 }
 
+// binds this mesh's buffers to the commandbuffer
+void Mesh::bind(vk::CommandBuffer& cmd) {
+    cmd.bindVertexInput({verts});
+    cmd.bindVertexIndices(*idx, VK_INDEX_TYPE_UINT32);
+}
+
+// draws this mesh
+void Mesh::draw(vk::    CommandBuffer& cmd) {
+    bind(cmd);
+    cmd.drawIndexed(nidx, 1);
+}
+
+// destructor
 Mesh::~Mesh(){
     delete verts;
     delete idx;

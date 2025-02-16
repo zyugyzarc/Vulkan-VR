@@ -53,10 +53,13 @@ public:
     void bindVertexInput(std::vector<Buffer*>);
 
     // mirrors vkCmdBindIndexBuffer
-    void bindVertexIndecies(Buffer&, VkIndexType);
+    void bindVertexIndices(Buffer&, VkIndexType);
 
     // mirrors vkCmdDraw(num_verts, num_instances)
     void draw(uint32_t, uint32_t);
+
+    // mirrors vkCmdDrawIndexed(num_idx, num_instances)
+    void drawIndexed(uint32_t, uint32_t);
 
     // wraps vkCmdSetViewport and vkCmdSetScissor
     void setRenderArea(VkViewport, VkRect2D);
@@ -173,6 +176,8 @@ void CommandBuffer::imageTransition(
 
 // vkCmdBindPipeline
 void CommandBuffer::bindPipeline(Pipeline& p){
+    VkDescriptorSet d = p._getdescset();
+    vkCmdBindDescriptorSets(cmd, p, p, 0, 1, &d, 0, nullptr);
     vkCmdBindPipeline(cmd, p, p);
 }
 
@@ -191,7 +196,7 @@ void CommandBuffer::bindVertexInput(std::vector<Buffer*> bufs){
 }
 
 // vkCmdBindIndexBuffer
-void CommandBuffer::bindVertexIndecies(Buffer& buf, VkIndexType type) {
+void CommandBuffer::bindVertexIndices(Buffer& buf, VkIndexType type) {
     vkCmdBindIndexBuffer(cmd, buf, 0, type);
 }
 
@@ -204,6 +209,11 @@ void CommandBuffer::setRenderArea(VkViewport v, VkRect2D s){
 // vkCmdDraw
 void CommandBuffer::draw(uint32_t verts, uint32_t inst) {
     vkCmdDraw(cmd, verts, inst, 0, 0);
+}
+
+// vkCmdDrawIndexed
+void CommandBuffer::drawIndexed(uint32_t verts, uint32_t inst) {
+    vkCmdDrawIndexed(cmd, verts, inst, 0, 0, 0);
 }
 
 // vkCmdEndRendering

@@ -33,6 +33,8 @@ class Buffer {
     VkDeviceMemory memory;
     uint32_t size;
 
+    void* _mapped_ptr = nullptr;
+
     void _copy_from_buffer(Buffer&);
 public:
     Buffer(Device&, VkBufferUsageFlags, VkMemoryPropertyFlags, uint32_t);
@@ -148,14 +150,15 @@ void Buffer::_copy_from_buffer(Buffer& b) {
 
 // maps the memory held by this buffer
 void* Buffer::map() {
-    void* ret;
-    vkMapMemory(device, memory, 0, size, 0, &ret);
-    return ret;
+    if (_mapped_ptr != nullptr) return _mapped_ptr;
+    vkMapMemory(device, memory, 0, size, 0, &_mapped_ptr);
+    return _mapped_ptr;
 }
 
 // unmaps (and flushes) the memory allocated by map()
 void Buffer::unmap(void*& ptr) {
     vkUnmapMemory(device, memory);
+    _mapped_ptr = nullptr;
     ptr = nullptr;
 }
 

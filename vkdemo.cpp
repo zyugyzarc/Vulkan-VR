@@ -6,6 +6,10 @@
 
 std::string vert_shadercode = SHADERCODE(
     
+    layout (binding = 0) uniform UnformBufferObject {
+        float t;
+    };
+
     layout (location = 0) in vec3 vertpos;
     layout (location = 1) in vec3 vertcol;
 
@@ -13,6 +17,7 @@ std::string vert_shadercode = SHADERCODE(
 
     void main() {
         gl_Position = vec4(vertpos, 1.0);
+        gl_Position.x *= sin(t / 5.);
         fragcol = vertcol;
     }
 );
@@ -30,6 +35,10 @@ std::string frag_shadercode = SHADERCODE(
 struct Vertex {
     glm::vec3 pos;
     glm::vec3 col;
+};
+
+struct UniformStruct {
+    float t;
 };
 
 std::vector<Vertex> model = {
@@ -50,7 +59,7 @@ int main() {
 
     dev.init();  // initialize the device
 
-    sc::Mesh& myobj = *new sc::Mesh(dev, "suzane.obj");
+    // sc::Mesh& myobj = *new sc::Mesh(dev, "suzane.obj");
 
     // create shader modules from above
     vk::ShaderModule& vert = *new vk::ShaderModule(dev, "_shader.vert", vert_shadercode);
@@ -61,6 +70,13 @@ int main() {
                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                 sizeof(Vertex) * model.size());
+
+    // create uniform buffer
+    vk::Buffer& uniformbuffer = *new vk::Buffer(dev,
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                sizeof(UniformStruct)
+    );
 
     // copy the model onto the buffer
     vertbuffer.mapped([&](void* target) {
@@ -77,12 +93,18 @@ int main() {
 
     // create a graphics pipeline, with one color attachment, and the two shader modules
     vk::Pipeline& graphical = vk::Pipeline::Graphics(
-        dev, {},
+        dev, 
+        // descriptor input
+        {{
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .stageFlags = VK_SHADER_STAGE_ALL
+        }},
+        // vertex input
         {{.stride = sizeof(Vertex),
           .rate = VK_VERTEX_INPUT_RATE_VERTEX,
           .attr = {
-            {.format=VK_FORMAT_R32G32B32_SFLOAT},
-            {.format=VK_FORMAT_R32G32B32_SFLOAT, .offset=offsetof(Vertex, col)},
+            {.format=VK_FORMAT_R32G32B32_SFLOAT}, // position
+            {.format=VK_FORMAT_R32G32B32_SFLOAT, .offset=offsetof(Vertex, col)}, // color
           }
           }}, vert,
         {VK_FORMAT_B8G8R8A8_SRGB}, VK_FORMAT_UNDEFINED, frag
@@ -92,7 +114,7 @@ int main() {
     VkSemaphore sem_render_finish = dev.semaphore();
     VkFence fence_wait_frame = dev.fence();
 
-     goto _end;
+    float t = 0;
 
     while (instance.update()) {
 
@@ -106,6 +128,15 @@ int main() {
             .subresourceRange = {
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
         });
+
+        // update uniforms
+        {
+            UniformStruct& unif = *(UniformStruct*) uniformbuffer.map();
+            unif.t = t;
+
+            graphical.flushDescriptors();
+            graphical.writeDescriptor(0, uniformbuffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        }
         
         // record the commandbuffer
         graphics.command() << [&](vk::CommandBuffer& cmd) {
@@ -164,9 +195,10 @@ int main() {
 
         // cpu: wait for the thing to be done
         dev.wait(fence_wait_frame);
-    }
 
-    _end:
+        // keep a static time
+        t += 1./60;
+    }
 
     dev.idle();
 
@@ -180,8 +212,9 @@ int main() {
     delete &presentation;
 
     delete &vertbuffer;
+    delete &uniformbuffer;
 
-    delete &myobj;
+    // delete &myobj;
     
     delete &dev;
     delete &instance;
