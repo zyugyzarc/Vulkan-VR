@@ -6,8 +6,11 @@
 
 std::string vert_shadercode = SHADERCODE(
     
-    layout (binding = 0) uniform UnformBufferObject {
+    layout (set = 0, binding = 0) uniform UnformBufferObject {
         float t;
+    };
+    layout (set = 1, binding = 0) uniform UnformBufferObject2 {
+        float t_off;
     };
 
     layout (location = 0) in vec3 vertpos;
@@ -18,6 +21,7 @@ std::string vert_shadercode = SHADERCODE(
     void main() {
         gl_Position = vec4(vertpos, 1.0);
         gl_Position.x *= sin(t / 5.);
+        gl_Position.y *= cos( t + t_off / 5.);
         fragcol = vertcol;
     }
 );
@@ -78,6 +82,12 @@ int main() {
                 sizeof(UniformStruct)
     );
 
+    vk::Buffer& uniformbuffer2 = *new vk::Buffer(dev,
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                sizeof(UniformStruct)
+    );
+
     // copy the model onto the buffer
     vertbuffer.mapped([&](void* target) {
         
@@ -96,8 +106,11 @@ int main() {
         dev, 
         // descriptor input
         {{
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .stageFlags = VK_SHADER_STAGE_ALL
+            {.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .stageFlags = VK_SHADER_STAGE_ALL}
+        },{
+            {.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .stageFlags = VK_SHADER_STAGE_ALL}
         }},
         // vertex input
         {{.stride = sizeof(Vertex),
@@ -134,8 +147,12 @@ int main() {
             UniformStruct& unif = *(UniformStruct*) uniformbuffer.map();
             unif.t = t;
 
-            graphical.flushDescriptors();
-            graphical.writeDescriptor(0, uniformbuffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+            UniformStruct& unif2 = *(UniformStruct*) uniformbuffer2.map();
+            unif.t = t;
+
+            graphical.descriptorSet(0);
+            graphical.writeDescriptor(0, 0, uniformbuffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+            graphical.writeDescriptor(1, 1, uniformbuffer2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         }
         
         // record the commandbuffer

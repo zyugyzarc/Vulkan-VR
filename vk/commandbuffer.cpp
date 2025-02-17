@@ -176,8 +176,8 @@ void CommandBuffer::imageTransition(
 
 // vkCmdBindPipeline
 void CommandBuffer::bindPipeline(Pipeline& p){
-    VkDescriptorSet d = p._getdescset();
-    vkCmdBindDescriptorSets(cmd, p, p, 0, 1, &d, 0, nullptr);
+    std::vector<VkDescriptorSet> d = p._getdescset();
+    vkCmdBindDescriptorSets(cmd, p, p, 0, (uint32_t) d.size(), d.data(), 0, nullptr);
     vkCmdBindPipeline(cmd, p, p);
 }
 

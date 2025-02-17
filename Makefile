@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX = g++
-CFLAGS = -std=c++23 -Og
+CFLAGS = -std=c++23 -Og -g
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
 # Source files and object files
@@ -11,7 +11,7 @@ OBJS = $(SRCS:.cpp=.o)
 TARGET = vkdemo
 
 # Default rule
-all: $(TARGET) clean
+all: $(TARGET) # clean
 
 # Rule for compiling vkdemo.cpp with -DHEADER
 vkdemo.o: vkdemo.cpp
