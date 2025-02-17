@@ -21,6 +21,9 @@
 
 namespace vk {
 
+// constant
+const int _p_res_count = 2;
+
 // helper struct
 struct VertexInputBinding {
     uint32_t stride;
@@ -44,7 +47,7 @@ class Pipeline {
 
     VkDescriptorPool descriptorPool;
     std::vector<std::vector<VkDescriptorSet>> descsets;
-    std::vector<uint32_t> descset_index = std::vector<uint32_t>(8);
+    std::vector<uint32_t> descset_index = std::vector<uint32_t>(_p_res_count);
 
     Pipeline(Device& d) : device(d) {}
     
@@ -325,14 +328,14 @@ void Pipeline::init_graphics (
         for (VkDescriptorSetLayoutBinding i: descriptors) {
             poolsizes.push_back({
                 .type = i.descriptorType,
-                .descriptorCount = 16 // allocate 16 of each -- double of the default (8) seems to work
+                .descriptorCount = _p_res_count * 2 // allocate _p_res_count of each -- double of the default (_p_res_count) seems to work
             });
         }
     }
 
     VkDescriptorPoolCreateInfo poolInfo {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = (uint32_t) descriptorsets.size() * 8,
+        .maxSets = (uint32_t) descriptorsets.size() * _p_res_count,
         .poolSizeCount = (uint32_t) poolsizes.size(),
         .pPoolSizes = poolsizes.data(),
     };
@@ -340,18 +343,18 @@ void Pipeline::init_graphics (
     VK_ASSERT( vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) );
 
     // allocate the desc sets now
-    // allocate 8 descriptor sets to cycle through
+    // allocate _p_res_count descriptor sets to cycle through
     descsets.resize(descriptorsets.size());
     for (int i = 0; i < descriptorsets.size(); i++) {
-        std::vector<VkDescriptorSetLayout> layouts(8, desc_layouts[i]);
+        std::vector<VkDescriptorSetLayout> layouts(_p_res_count, desc_layouts[i]);
         VkDescriptorSetAllocateInfo allocInfo {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
             .descriptorPool = descriptorPool,
-            .descriptorSetCount = 8,
+            .descriptorSetCount = _p_res_count,
             .pSetLayouts = layouts.data(),
         };
 
-        descsets[i].resize(8);
+        descsets[i].resize(_p_res_count);
         VK_ASSERT( vkAllocateDescriptorSets(device, &allocInfo, descsets[i].data()) );
     }
 
@@ -365,7 +368,7 @@ void Pipeline::init_compute (ShaderModule& c) {
 void Pipeline::descriptorSet(uint32_t set) {
     // just move the index over
 
-    descset_index[set] = (descset_index[set] + 1) % 8;
+    descset_index[set] = (descset_index[set] + 1) % _p_res_count;
 }
 
 std::vector<VkDescriptorSet> Pipeline::_getdescset() {

@@ -72,7 +72,7 @@ Mesh::Mesh (vk::Device& device, std::string filename) {
     while (objfile >> lh) {
 
         if (lh[0] == '#') {
-            // comment - ignore
+            objfile.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         }
         else if (lh == "vn") {
             float x, y, z;
@@ -98,21 +98,21 @@ Mesh::Mesh (vk::Device& device, std::string filename) {
             for (int _ = 0; _ < 3; _++) {
                 // assume triangle faces, 3 verticies per face.
                 std::tuple<int, int, int> fv;
-                objfile >> std::get<0>(fv);
-                objfile >> std::get<1>(fv);
-                objfile >> std::get<2>(fv);
+                std::string v_str;
+                std::string vt_str;
+                std::string vn_str;
+
+                std::getline(objfile,  v_str, '/');
+                std::getline(objfile, vt_str, '/');
+                objfile >> vn_str;
 
                 // obj files are 1-indexed
-                std::get<0>(fv)--;
-                std::get<1>(fv)--;
-                std::get<2>(fv)--;
+                std::get<0>(fv) = std::stoi( v_str) -1;
+                std::get<1>(fv) = std::stoi(vt_str) -1;
+                std::get<2>(fv) = std::stoi(vn_str) -1;
 
                 // check if we already made this vertex
-                if (tmp_idx.contains(fv)) {
-                    // just add that index to the idx buffer
-                    _idx.push_back( tmp_idx[fv] );
-                }
-                else {
+                if (true || !tmp_idx.contains(fv)) {
                     // we need to create a new vertex, and push that
                     Vertex p;
                     p.pos = tmp_pos[std::get<0>(fv)];
@@ -120,14 +120,18 @@ Mesh::Mesh (vk::Device& device, std::string filename) {
                     p.norm = tmp_norm[std::get<2>(fv)];
 
                     _verts.push_back(p);
-                    _idx.push_back( _verts.size() - 1);
+
+                    tmp_idx[fv] = _verts.size() - 1;
                 }
+                _idx.push_back( tmp_idx[fv] );
             }
         }
     }
 
     nverts = _verts.size();
     nidx = _idx.size();
+
+    // printf("loaded model %s with %d verts and %d indecies (%d faces)\n", filename.c_str(), nverts, nidx, nidx/3);
 
     // create the buffers -- for now, they're host visible
     verts = new vk::Buffer(device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -153,7 +157,7 @@ void Mesh::bind(vk::CommandBuffer& cmd) {
 }
 
 // draws this mesh
-void Mesh::draw(vk::    CommandBuffer& cmd) {
+void Mesh::draw(vk::CommandBuffer& cmd) {
     bind(cmd);
     cmd.drawIndexed(nidx, 1);
 }

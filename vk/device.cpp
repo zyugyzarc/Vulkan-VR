@@ -71,6 +71,7 @@ public:
 
     // creates a fence
     VkFence fence();
+    VkFence fence(bool);
 
     // waits for a fence
     void wait(VkFence);
@@ -259,7 +260,7 @@ void Device::createswapchain() {
     };
 
     // present mode, assume mailbox exists. if errors, use VK_PRESENT_MODE_FIFO_KHR
-    VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+    VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR; //VK_PRESENT_MODE_MAILBOX_KHR;
 
     // get the rendering extent from glfw
     int width, height;
@@ -345,7 +346,14 @@ VkSemaphore Device::semaphore() {
 }
 
 VkFence Device::fence() {
-    VkFenceCreateInfo i {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    return fence(false);
+}
+
+VkFence Device::fence(bool signaled) {
+    VkFenceCreateInfo i {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0u
+    };
     VkFence s;
     VK_ASSERT( vkCreateFence(device, &i, nullptr, &s) );
     fences.push_back(s);

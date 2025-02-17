@@ -3,58 +3,12 @@
 
 #include <iostream>
 #include <string>
-
-std::string vert_shadercode = SHADERCODE(
-    
-    layout (set = 0, binding = 0) uniform UnformBufferObject {
-        float t;
-    };
-    layout (set = 1, binding = 0) uniform UnformBufferObject2 {
-        float t_off;
-    };
-
-    layout (location = 0) in vec3 vertpos;
-    layout (location = 1) in vec3 vertcol;
-
-    layout (location = 0) out vec3 fragcol;
-
-    void main() {
-        gl_Position = vec4(vertpos, 1.0);
-        gl_Position.x *= sin(t / 5.);
-        gl_Position.y *= cos( t + t_off / 5.);
-        fragcol = vertcol;
-    }
-);
-
-std::string frag_shadercode = SHADERCODE(
-    
-    layout(location = 0) in vec3 vertcol;
-    layout(location = 0) out vec4 outcol;
-
-    void main() {
-        outcol = vec4(vertcol, 1.0);
-    }
-);
-
-struct Vertex {
-    glm::vec3 pos;
-    glm::vec3 col;
-};
-
-struct UniformStruct {
-    float t;
-};
-
-std::vector<Vertex> model = {
-    {{0.f, -.5f, 0.f}, {1.f, 0.f, 0.f}},
-    {{.5f, .5f, 0.f},  {0.f, 1.f, 0.f}},
-    {{-.5f, .5f, 0.f}, {0.f, 0.f, 1.f}},
-};
+#include <chrono>
 
 int main() {
 
     // create the instance and the device    
-    vk::Instance& instance = *new vk::Instance("Funny Triangle", 2560, 1440);
+    vk::Instance& instance = *new vk::Instance("Funny monke", 2560, 1440);
     vk::Device& dev = *new vk::Device(instance);
 
     // create the required queues
@@ -63,76 +17,73 @@ int main() {
 
     dev.init();  // initialize the device
 
-    // sc::Mesh& myobj = *new sc::Mesh(dev, "suzane.obj");
+    // initialize monke
+    sc::Mesh& monke_mesh = *new sc::Mesh(dev, "suzane.obj");
 
-    // create shader modules from above
-    vk::ShaderModule& vert = *new vk::ShaderModule(dev, "_shader.vert", vert_shadercode);
-    vk::ShaderModule& frag = *new vk::ShaderModule(dev, "_shader.frag", frag_shadercode);
+    sc::Material& monke_mat = *new sc::Material(dev, "default_mat", 
+    SHADERCODE(
+        layout (set = 0, binding = 0) uniform Obj {
+            mat4 model;
+            mat4 view;
+            mat4 proj;
+        };
 
-    // create vert buffer
-    vk::Buffer& vertbuffer = *new vk::Buffer(dev,
-                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                sizeof(Vertex) * model.size());
+        layout (location = 0) in vec3 pos;
+        layout (location = 1) in vec3 norm;
+        layout (location = 2) in vec2 uv;
 
-    // create uniform buffer
-    vk::Buffer& uniformbuffer = *new vk::Buffer(dev,
-                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                sizeof(UniformStruct)
-    );
+        layout (location = 0) out vec3 fnorm;
+        layout (location = 1) out vec2 fuv;
 
-    vk::Buffer& uniformbuffer2 = *new vk::Buffer(dev,
-                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                sizeof(UniformStruct)
-    );
+        void main() {
+            
+            gl_Position = proj * view * model * vec4(pos, 1.0);
 
-    // copy the model onto the buffer
-    vertbuffer.mapped([&](void* target) {
-        
-        char* src = (char*) model.data();
-        char* dst = (char*) target;
-        for (int i = 0; i < sizeof(Vertex) * model.size(); i++) {
-            *dst = *src;
-            dst++;
-            src++;
+            fnorm = norm;
+            fuv = uv;
         }
+    ),
+    SHADERCODE(
+        layout (location = 0) in vec3 fnorm;
+        layout (location = 1) in vec2 fuv;
 
-    });
-
-    // create a graphics pipeline, with one color attachment, and the two shader modules
-    vk::Pipeline& graphical = vk::Pipeline::Graphics(
-        dev, 
-        // descriptor input
-        {{
-            {.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .stageFlags = VK_SHADER_STAGE_ALL}
-        },{
-            {.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .stageFlags = VK_SHADER_STAGE_ALL}
-        }},
-        // vertex input
-        {{.stride = sizeof(Vertex),
-          .rate = VK_VERTEX_INPUT_RATE_VERTEX,
-          .attr = {
-            {.format=VK_FORMAT_R32G32B32_SFLOAT}, // position
-            {.format=VK_FORMAT_R32G32B32_SFLOAT, .offset=offsetof(Vertex, col)}, // color
-          }
-          }}, vert,
-        {VK_FORMAT_B8G8R8A8_SRGB}, VK_FORMAT_UNDEFINED, frag
+        layout (location = 0) out vec4 col;
+        
+        void main() {
+            float v = fnorm.z;
+            col = vec4(v, v, v, v > 0.0 ? 1.0 : 0.0);
+        }
+    )
     );
 
+    // new monke object
+    sc::Entity& monke = *new sc::Entity(dev, monke_mesh, monke_mat);
+    
+    // setup scene
+    sc::camera.pos = glm::vec3(0, 0, -5);
+    sc::camera.target = glm::vec3(0, 0, 0);
+    sc::camera.fov = 45;
+
+    monke.position = glm::vec3(0, 0, 0);
+    monke.rotation = glm::quat(1, 0, 0, 0);
+    monke.scaling = glm::vec3(1, 1, 1);
+
+    // synch structures
     VkSemaphore sem_img_avail = dev.semaphore();
     VkSemaphore sem_render_finish = dev.semaphore();
-    VkFence fence_wait_frame = dev.fence();
+    VkFence fence_wait_frame = dev.fence(true);
 
     float t = 0;
 
     while (instance.update()) {
+        
+        // cpu: wait for the thing to be done
+        dev.wait(fence_wait_frame);
 
-        // get an image from the screen
+        // get an image from the screen -- blocks
         vk::Image& screen = dev.getSwapchainImage(VK_NULL_HANDLE, sem_img_avail);
+
+auto start_time = std::chrono::high_resolution_clock::now();
 
         screen.view({
             .image = screen,
@@ -141,19 +92,6 @@ int main() {
             .subresourceRange = {
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
         });
-
-        // update uniforms
-        {
-            UniformStruct& unif = *(UniformStruct*) uniformbuffer.map();
-            unif.t = t;
-
-            UniformStruct& unif2 = *(UniformStruct*) uniformbuffer2.map();
-            unif.t = t;
-
-            graphical.descriptorSet(0);
-            graphical.writeDescriptor(0, 0, uniformbuffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-            graphical.writeDescriptor(1, 1, uniformbuffer2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        }
         
         // record the commandbuffer
         graphics.command() << [&](vk::CommandBuffer& cmd) {
@@ -177,19 +115,14 @@ int main() {
                 {{0, 0}, {2560, 1440}}
             );
 
-            // bind the graphics pipeline
-            cmd.bindPipeline(graphical);
-
-            cmd.bindVertexInput({&vertbuffer});
-
             // set render area
             cmd.setRenderArea(
                 {0.f, 0.f, 2560.f, 1440.f, 0.f, 1.f}, // viewport
                 {{0, 0}, {2560, 1440}} // scissor rect
             );
 
-            // draw 3 verticies (triangle)
-            cmd.draw(3, 1);
+            // draw the monke
+            monke.draw(cmd);
 
             // end rendering
             cmd.endRendering();
@@ -210,29 +143,24 @@ int main() {
         // throw the image onto the screen
         presentation.present(screen, {sem_render_finish});
 
-        // cpu: wait for the thing to be done
-        dev.wait(fence_wait_frame);
+auto end_time = std::chrono::high_resolution_clock::now();
 
-        // keep a static time
-        t += 1./60;
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+        printf(" frametime: %3.3f ms  fps: %3.1f  \r", duration.count() / 1000.0, 1000000.0 / duration.count());
+        fflush(stdout);
     }
 
     dev.idle();
 
     // cleanup
-    delete &graphical;
-
-    delete &vert;
-    delete &frag;
+    delete &monke;
+    delete &monke_mat;
+    delete &monke_mesh;
 
     delete &graphics;
     delete &presentation;
 
-    delete &vertbuffer;
-    delete &uniformbuffer;
-
-    // delete &myobj;
-    
     delete &dev;
     delete &instance;
 

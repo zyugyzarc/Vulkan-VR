@@ -13,8 +13,8 @@
 #include "queue.cpp"
 #include "shadermodule.cpp"
 #include "image.cpp"
-#include "pipeline.cpp"
 #include "commandbuffer.cpp"
 #include "buffer.cpp"
+#include "pipeline.cpp"
 
 #endif
