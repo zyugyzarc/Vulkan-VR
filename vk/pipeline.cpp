@@ -286,7 +286,7 @@ void Pipeline::init_graphics (
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
         .colorAttachmentCount = (uint32_t) attachment_col.size(),
         .pColorAttachmentFormats = attachment_col.data(),
-        .depthAttachmentFormat = attachment_depth
+    .depthAttachmentFormat = attachment_depth
     };
 
     // check if depth is available and update this
@@ -310,7 +310,7 @@ void Pipeline::init_graphics (
         .pViewportState = &viewportState,
         .pRasterizationState = &rasterizer,
         .pMultisampleState = &multisampling,
-        .pDepthStencilState = nullptr,
+        .pDepthStencilState = &depthstencil,
         .pColorBlendState = &colorBlending,
         .pDynamicState = &dynamicState,
         .layout = pipelineLayout,

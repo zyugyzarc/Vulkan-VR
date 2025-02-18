@@ -22,11 +22,12 @@ int main() {
 
     sc::Material& monke_mat = *new sc::Material(dev, "default_mat", 
     SHADERCODE(
-        layout (set = 0, binding = 0) uniform Obj {
+        layout (set = 0, binding = 0) uniform Obj {  // transforms uniform
             mat4 model;
+            mat4 norm;
             mat4 view;
             mat4 proj;
-        };
+        } tf;
 
         layout (location = 0) in vec3 pos;
         layout (location = 1) in vec3 norm;
@@ -37,9 +38,9 @@ int main() {
 
         void main() {
             
-            gl_Position = proj * view * model * vec4(pos, 1.0);
+            gl_Position = tf.proj * tf.view * tf.model * vec4(pos, 1.);
+            fnorm = (tf.norm * vec4(norm, 1.0)).xyz;
 
-            fnorm = norm;
             fuv = uv;
         }
     ),
@@ -50,8 +51,8 @@ int main() {
         layout (location = 0) out vec4 col;
         
         void main() {
-            float v = fnorm.z;
-            col = vec4(v, v, v, v > 0.0 ? 1.0 : 0.0);
+            float v = fnorm.z; // ah yes, classic lighting
+            col = vec4(fnorm, 1.0);
         }
     )
     );
@@ -63,10 +64,32 @@ int main() {
     sc::camera.pos = glm::vec3(0, 0, -5);
     sc::camera.target = glm::vec3(0, 0, 0);
     sc::camera.fov = 45;
+    sc::aspect = 16./18.;
+    sc::eyedist = 0.08;  // in mm
+
 
     monke.position = glm::vec3(0, 0, 0);
-    monke.rotation = glm::quat(1, 0, 0, 0);
+    monke.rotation = glm::angleAxis(3.1415f / 2.f, glm::vec3(-1., 0., 0.));
     monke.scaling = glm::vec3(1, 1, 1);
+
+    // depth buffer
+    // the render target only gives us a color output attachment
+    // but we also need a depth attachment
+    vk::Image& depth_buffer = *new vk::Image(dev, {
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_D32_SFLOAT,
+        .extent = {2560, 1440, 1},
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    },  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    depth_buffer.view({
+        .image = depth_buffer,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = VK_FORMAT_D32_SFLOAT,
+        .subresourceRange = {
+        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT}
+    });
 
     // synch structures
     VkSemaphore sem_img_avail = dev.semaphore();
@@ -103,6 +126,15 @@ auto start_time = std::chrono::high_resolution_clock::now();
                 VK_IMAGE_ASPECT_COLOR_BIT
             );
 
+            // set the depth to be a depth-attachment optimal
+            cmd.imageTransition(depth_buffer,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
+                VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
+                    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
+                    , VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_ASPECT_DEPTH_BIT
+            );
+
             // set the render target
             cmd.beginRendering(
                 { VkRenderingAttachmentInfo{
@@ -110,18 +142,40 @@ auto start_time = std::chrono::high_resolution_clock::now();
                   .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                   .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                   .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                  .clearValue = VkClearColorValue{0.f, 0.f, .1f, 1.f}
-                }}, {},
+                  .clearValue = VkClearColorValue{0.f, 0.f, .1f, 1.f},
+                }}, VkRenderingAttachmentInfo{
+                    .imageView = depth_buffer,
+                    .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                    .clearValue = 1.f //VkClearDepthStencilValue{1.0f, 0u},
+                },
                 {{0, 0}, {2560, 1440}}
             );
 
-            // set render area
+            // set render area (L)
+            sc::eyeshift = -1;
             cmd.setRenderArea(
-                {0.f, 0.f, 2560.f, 1440.f, 0.f, 1.f}, // viewport
-                {{0, 0}, {2560, 1440}} // scissor rect
+                {0.f, 0.f, 2560.f / 2, 1440.f, 0.f, 1.f}, // viewport
+                {{0, 0}, {2560 / 2, 1440}} // scissor rect
             );
 
+            // rotate the monke
+            monke.rotation = 
+                   glm::angleAxis(3.1415f / 2.f, glm::vec3(-1., 0., 0.)) *
+                   glm::angleAxis(10 * t, glm::vec3(0, 0, 1));
+
             // draw the monke
+            monke.draw(cmd);
+
+            // set render area (R)
+            sc::eyeshift = 1;
+            cmd.setRenderArea(
+                {2560.f / 2, 0.f, 2560.f / 2, 1440.f, 0.f, 1.f}, // viewport
+                {{2560/2, 0}, {2560 / 2, 1440}} // scissor rect
+            );
+
+            // draw the monke again
             monke.draw(cmd);
 
             // end rendering
@@ -146,6 +200,8 @@ auto start_time = std::chrono::high_resolution_clock::now();
 auto end_time = std::chrono::high_resolution_clock::now();
 
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+        t += duration.count() / 1000000.0;
 
         printf(" frametime: %3.3f ms  fps: %3.1f  \r", duration.count() / 1000.0, 1000000.0 / duration.count());
         fflush(stdout);

@@ -19,16 +19,25 @@ namespace vk {
 // Represents a VkImage.
 // Currently wraps a VkImage, and allows a
 // VkImageView to ve created from it.
-// [!!] Currently, does not own the VkImage
 class Image {
 
     Device& device;
     VkImage image;
     VkImageView imview = VK_NULL_HANDLE;
+    VkDeviceMemory mem = VK_NULL_HANDLE;
+
+    bool owner;
 public:
     
-    // for now, we can only wrap images that already exist
-    Image(Device& d, VkImage _) : device(d), image(_) {}
+    // wrap an existsing image
+    Image(Device& d, VkImage _) : device(d), image(_), owner(false), mem(VK_NULL_HANDLE) {
+        owner = false;
+        mem = VK_NULL_HANDLE;
+    }
+
+    // create a new image
+    Image(Device& d, VkImageCreateInfo, VkMemoryPropertyFlags);
+
     ~Image();
 
     // allow creation of imageViews
@@ -60,6 +69,53 @@ inline void _VkAssert (VkResult res, std::string file, int line) {
     );
 }
 
+Image::Image (Device& d, VkImageCreateInfo info, VkMemoryPropertyFlags memflags) : device(d), owner(true) {
+
+    // all the parameters that need to be default
+    info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    info.mipLevels = 1;
+    info.arrayLayers = 1;
+    info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    info.samples = VK_SAMPLE_COUNT_1_BIT;
+
+    // only the graphics queue needs to access this, so we're chilling
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VK_ASSERT( vkCreateImage(device, &info, nullptr, &image) );
+
+    // now allocate memory
+    VkMemoryRequirements memRequirements;
+    vkGetImageMemoryRequirements(device, image, &memRequirements);
+
+
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(device, &memProperties);
+
+    uint32_t i;
+    for (i = 0; i < memProperties.memoryTypeCount; i++) {
+        if (
+            memRequirements.memoryTypeBits & (1 << i)
+            && ((memProperties.memoryTypes[i].propertyFlags & memflags) == memflags)
+        ) {
+            goto found_heap_index;
+        }
+    }
+    throw std::runtime_error("Failed to find device memory");
+found_heap_index:
+
+    VkMemoryAllocateInfo alloc {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = memRequirements.size,
+        .memoryTypeIndex = i
+    };
+
+    VK_ASSERT( vkAllocateMemory(device, &alloc, nullptr, &mem) );
+
+    // ok cool, new image now
+    vkBindImageMemory(device, image, mem, 0);
+}
+
+
 void Image::view (VkImageViewCreateInfo v) { view(v, false); }
 
 void Image::view (VkImageViewCreateInfo v, bool keep_prev) {
@@ -79,6 +135,10 @@ void Image::view (VkImageViewCreateInfo v, bool keep_prev) {
 Image::~Image () {
     if (imview != VK_NULL_HANDLE) {
         vkDestroyImageView((VkDevice) device, imview, nullptr);
+    }
+    if (mem != VK_NULL_HANDLE) {
+        vkDestroyImage(device, image, nullptr);
+        vkFreeMemory(device, mem, nullptr);
     }
 }
 

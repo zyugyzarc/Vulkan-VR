@@ -1,2 +1,2 @@
 #version 450
-layout (set = 0, binding = 0) uniform Obj { mat4 model; mat4 view; mat4 proj; }; layout (location = 0) in vec3 pos; layout (location = 1) in vec3 norm; layout (location = 2) in vec2 uv; layout (location = 0) out vec3 fnorm; layout (location = 1) out vec2 fuv; void main() { gl_Position = proj * view * model * vec4(pos, 1.0); fnorm = norm; fuv = uv; }
+layout (set = 0, binding = 0) uniform Obj { mat4 model; mat4 norm; mat4 view; mat4 proj; } tf; layout (location = 0) in vec3 pos; layout (location = 1) in vec3 norm; layout (location = 2) in vec2 uv; layout (location = 0) out vec3 fnorm; layout (location = 1) out vec2 fuv; void main() { gl_Position = tf.proj * tf.view * tf.model * vec4(pos, 1.); fnorm = (tf.norm * vec4(norm, 1.0)).xyz; fuv = uv; }
