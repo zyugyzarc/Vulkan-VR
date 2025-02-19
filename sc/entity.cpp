@@ -12,35 +12,13 @@
     #include "../vk/vklib.h"
     #include "mesh.cpp"
     #include "material.cpp"
+    #include "camera.cpp"
     #undef HEADER
 #endif
 
 
 namespace sc {
 
-// global constants
-extern float aspect;  // aspect ratio
-extern float eyedist;  // distance between the eyes (in world units)
-extern float eyeshift;  // if -1, render for the left eye, if 1, for the right eye
-
-struct Camera_t {
-    glm::vec3 pos;
-    glm::vec3 target;
-    float fov;  // in degrees
-
-    glm::mat4 view() const {
-        return glm::translate(
-            glm::lookAt(pos, target, glm::vec3(0.0f, 1.0f, 0.0f)),
-            glm::vec3(eyedist * -eyeshift, 0, 0)
-        );
-    }
-
-    glm::mat4 proj() const {
-        glm::mat4 res = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.f);
-        res[1][1] *= -1;
-        return res;
-    }
-};
 
 struct uni_Transform_t {
     glm::mat4 model;
@@ -48,9 +26,6 @@ struct uni_Transform_t {
     glm::mat4 view;
     glm::mat4 proj;
 };
-
-// this is the global camera
-extern Camera_t camera;
 
 // represents an entity in the scene.
 // contains a Mesh, a Material, and transforms
@@ -78,12 +53,7 @@ public:
 #ifndef HEADER
 namespace sc {
 
-Camera_t camera {};
-
-float aspect = 16.f / 9;
-float eyedist = 0;
-float eyeshift = 0;
-
+// initialize the entity with the mesh, material, and make buffers for the transforms
 Entity::Entity(vk::Device& d, Mesh& mh, Material& mt): mesh(mh), mat(mt)  {
 
     for (int i = 0; i < 8; i++) {
@@ -96,7 +66,7 @@ Entity::Entity(vk::Device& d, Mesh& mh, Material& mt): mesh(mh), mat(mt)  {
     tbuf_idx = 0;
 }
 
-// draw the current entity.
+// draw the current entity
 void Entity::draw(vk::CommandBuffer& cmd) {
 
     uni_Transform_t* tf = (uni_Transform_t*) transforms[tbuf_idx]->map();

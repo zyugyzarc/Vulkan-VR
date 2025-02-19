@@ -361,10 +361,6 @@ void Pipeline::init_graphics (
     // ok now we're done for real
 }
 
-void Pipeline::init_compute (ShaderModule& c) {
-    // todo
-}
-
 void Pipeline::descriptorSet(uint32_t set) {
     // just move the index over
 
@@ -399,6 +395,19 @@ void Pipeline::writeDescriptor(uint32_t set, uint32_t binding, Buffer& buffer, V
     };
 
     vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+}
+
+
+void Pipeline::init_compute (ShaderModule& c) {
+    
+    VkComputePipelineCreateInfo pipelineInfo {
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .layout = pipelineLayout,
+        .stage = computeShaderStageInfo,
+    };
+
+    VK_ASSERT( vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) );
+
 }
 
 // destructor

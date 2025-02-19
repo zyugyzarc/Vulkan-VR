@@ -6,3 +6,11 @@ vlk/vkdemo
 vlk/shaders/glslc
 
 vlk/shaders/
+
+vkdemo
+
+*.frag
+
+*.spv
+
+*.vert

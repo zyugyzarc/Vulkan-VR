@@ -63,7 +63,7 @@ Material::Material (vk::Device& d, std::string name, std::string vscode, std::st
                 {.format=VK_FORMAT_R32G32_SFLOAT,    .offset=offsetof(Vertex, uv)},  // texture coords
             }
         }},
-        *vs, {VK_FORMAT_B8G8R8A8_SRGB}, VK_FORMAT_D32_SFLOAT, *fs
+        *vs, {vk_COLOR_FORMAT}, VK_FORMAT_D32_SFLOAT, *fs
     );
 
     if (pipe == nullptr) {

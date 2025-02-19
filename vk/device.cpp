@@ -242,7 +242,7 @@ void Device::init() {
 }
 
 // Creates and initalizes the swapchain
-// hardcoded to use 32-bit SRGB (VK_FORMAT_B8G8R8A8_SRGB),
+// hardcoded to use 32-bit SRGB (vk_COLOR_FORMAT),
 // VK_PRESENT_MODE_MAILBOX_KHR (not always available), and
 // VK_COLOR_SPACE_SRGB_NONLINEAR_KHR.
 // Also assumes that the image sharing mode is
@@ -255,7 +255,8 @@ void Device::createswapchain() {
 
     // 32-bit RGBA in sRGB
     VkSurfaceFormatKHR format {
-        .format = VK_FORMAT_B8G8R8A8_SRGB,
+        // .format = vk_COLOR_FORMAT,
+        .format = VK_FORMAT_B8G8R8A8_UNORM,
         .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
     };
 
@@ -280,7 +281,7 @@ void Device::createswapchain() {
         .imageColorSpace = format.colorSpace,
         .imageExtent = extent,
         .imageArrayLayers = 1,
-        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
         .imageSharingMode = families.size() > 1 ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
         .queueFamilyIndexCount = (uint32_t) families.size(),
         .pQueueFamilyIndices = families.data(),
@@ -304,7 +305,7 @@ void Device::createswapchain() {
         Image* img = new Image(*this, i);
         img->view( VkImageViewCreateInfo {
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = VK_FORMAT_B8G8R8A8_SRGB,
+            .format = vk_COLOR_FORMAT,
             .components = {
                 .r = VK_COMPONENT_SWIZZLE_IDENTITY,
                 .g = VK_COMPONENT_SWIZZLE_IDENTITY,

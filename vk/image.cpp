@@ -25,13 +25,10 @@ class Image {
     VkImage image;
     VkImageView imview = VK_NULL_HANDLE;
     VkDeviceMemory mem = VK_NULL_HANDLE;
-
-    bool owner;
 public:
     
     // wrap an existsing image
-    Image(Device& d, VkImage _) : device(d), image(_), owner(false), mem(VK_NULL_HANDLE) {
-        owner = false;
+    Image(Device& d, VkImage _) : device(d), image(_), mem(VK_NULL_HANDLE) {
         mem = VK_NULL_HANDLE;
     }
 
@@ -69,7 +66,7 @@ inline void _VkAssert (VkResult res, std::string file, int line) {
     );
 }
 
-Image::Image (Device& d, VkImageCreateInfo info, VkMemoryPropertyFlags memflags) : device(d), owner(true) {
+Image::Image (Device& d, VkImageCreateInfo info, VkMemoryPropertyFlags memflags) : device(d) {
 
     // all the parameters that need to be default
     info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -121,6 +118,7 @@ void Image::view (VkImageViewCreateInfo v) { view(v, false); }
 void Image::view (VkImageViewCreateInfo v, bool keep_prev) {
     if (imview != VK_NULL_HANDLE && !keep_prev) {
         vkDestroyImageView((VkDevice) device, imview, nullptr);
+        imview = VK_NULL_HANDLE;
     }
 
     v.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -136,6 +134,7 @@ Image::~Image () {
     if (imview != VK_NULL_HANDLE) {
         vkDestroyImageView((VkDevice) device, imview, nullptr);
     }
+    // printf("[DEBUG] is it owner? %d\n", owner);
     if (mem != VK_NULL_HANDLE) {
         vkDestroyImage(device, image, nullptr);
         vkFreeMemory(device, mem, nullptr);

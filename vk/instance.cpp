@@ -7,6 +7,9 @@
 #include <glm/glm.hpp>
 #include <string>
 
+#define vk_COLOR_FORMAT VK_FORMAT_B8G8R8A8_UNORM
+#define vk_DEPTH_FORMAT VK_FORMAT_D32_SFLOAT
+
 namespace vk {
 
 // A vk::Instance wraps a VkInstance, a GLFWWindow and a VkSurfaceKHR.
