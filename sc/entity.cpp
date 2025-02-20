@@ -25,6 +25,7 @@ struct uni_Transform_t {
     glm::mat4 norm;
     glm::mat4 view;
     glm::mat4 proj;
+    float t;
 };
 
 // represents an entity in the scene.
@@ -80,6 +81,7 @@ void Entity::draw(vk::CommandBuffer& cmd) {
     tf->norm = glm::transpose(glm::inverse(tf->model));
     tf->view = camera.view();
     tf->proj = camera.proj();
+    tf->t += 1./60;
     
     // send it off to the shaders
     mat.descriptorSet(0);

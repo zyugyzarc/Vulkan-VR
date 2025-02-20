@@ -1,2 +1,0 @@
-#version 450
-layout (set = 0, binding = 0) uniform UnformBufferObject { float t; }; layout (set = 1, binding = 0) uniform UnformBufferObject2 { float t_off; }; layout (location = 0) in vec3 vertpos; layout (location = 1) in vec3 vertcol; layout (location = 0) out vec3 fragcol; void main() { gl_Position = vec4(vertpos, 1.0); gl_Position.x *= sin(t); gl_Position.y *= cos( t + t_off ); fragcol = vertcol; }

@@ -11,6 +11,7 @@ std::string  _shader_vert_default = SHADERCODE(
         mat4 norm;
         mat4 view;
         mat4 proj;
+        float t;
     } tf;
 
     layout (location = 0) in vec3 pos;
@@ -21,8 +22,8 @@ std::string  _shader_vert_default = SHADERCODE(
     layout (location = 1) out vec2 fuv;
 
     void main() {
-        
-        gl_Position = tf.proj * tf.view * tf.model * vec4(pos, 1.);
+        gl_Position = tf.proj * tf.view * tf.model * vec4(pos, 1.)
+                    ; // + vec4(0., sin(pos.x * 10 + tf.t * 30) * 0.1, 0., 0.);
         fnorm = (tf.norm * vec4(norm, 1.0)).xyz;
 
         fuv = uv;
@@ -61,19 +62,69 @@ int main() {
         layout (binding = 0, rgba8) uniform readonly image2D imagein;
         layout (binding = 1, rgba8) uniform writeonly image2D imageout;
 
-        layout(local_size_x = 16, local_size_y = 16) in;
+        layout(local_size_x = 32, local_size_y = 32) in;
 
         vec3 linearToSRGB(vec3 color) {
+            // chatgpt cooked with this oneliner
             return mix(pow(color, vec3(1.0 / 2.4)) * 1.055 - 0.055, color * 12.92, lessThan(color, vec3(0.0031308)));
         }
 
         void main() {
-            ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-            vec4 color = imageLoad(imagein, coord);
+            ivec2 coord = ivec2(gl_GlobalInvocationID.xy); 
+            ivec2 coord_final = coord;
+
+            float K_1 = 5. / (2560.*1440.);
+            float K_2 = 5. / (2560.*2560.*1440.*1440.);
+            float r2;
+            vec2 sc;
+
+            // distortion correction:
+            if (coord.x < 2560 / 2) {
+                // left image
+                coord -= ivec2(2560/4, 1440/2); // pre transform
+                r2 = coord.x*coord.x + coord.y*coord.y; // r
+                sc = vec2(1 + K_1 * r2 + K_2 * r2 * r2); // transform
+                coord = ivec2(sc * vec2(coord));
+                coord +=  ivec2(2560/4, 1440/2); // post transform
+
+                if (coord.x > 2560/2) {
+                    coord.x = 2561;
+                }
+            }
+            else {
+                // right image
+                coord -= ivec2(3*2560/4, 1440/2); // pre transform
+                r2 = coord.x*coord.x + coord.y*coord.y; // r
+                sc = vec2(1 + K_1 * r2 + K_2 * r2 * r2); // transform
+                coord = ivec2(sc * vec2(coord));
+                coord +=  ivec2(3*2560/4, 1440/2); // post transform
+
+                if (coord.x < 2560/2) {
+                    coord.x = -1;
+                }
+            }
+
+            vec4 color = imageLoad(imagein, coord).bgra;  // for some reason it needs to be in bgra
+            
+            // vec4 color = vec4(0.0);
+
+            // vec4 color = vec4(mod(float(coord.x), 100.) / 100., mod(float(coord.y), 100.) / 100., 0., 1.);
+
+            // const int kernsize = 2;
+            // const int samples = 2;
+
+            // for (int i = -kernsize; i < kernsize; i+=kernsize/samples) {
+            //     for (int j = -kernsize; j < kernsize; j+=kernsize/samples) {
+            //         vec4 c = imageLoad(imagein, coord + ivec2(i, j)).bgra;
+            //         color += c / float(samples * samples * 4);
+            //     }
+            // }
 
             color.rgb = linearToSRGB(color.rgb);
 
-            imageStore(imageout, coord, color.bgra);  // for some reason it needs to be in bgra
+            // color.rgb = color.bbb; // use only blue
+
+            imageStore(imageout, coord_final, color);
         }
     ));
 
@@ -92,6 +143,14 @@ int main() {
     sc::Material& monke_mat = *new sc::Material(dev, "default_mat", 
     _shader_vert_default,
     SHADERCODE(
+        layout (set = 0, binding = 0) uniform Obj {  // transforms uniform
+            mat4 model;
+            mat4 norm;
+            mat4 view;
+            mat4 proj;
+            float t;
+        } tf;
+
         layout (location = 0) in vec3 fnorm;
         layout (location = 1) in vec2 fuv;
 
@@ -101,6 +160,12 @@ int main() {
             float v = fnorm.y; // ah yes, classic lighting
                                // basically directional light from above
             col = vec4(v, v*0.5, v*0.25, 1.0);
+
+            // float displacement = sin(gl_FragCoord.x /100. + tf.t * 30) * 0.05;
+
+            // vec3 displacedPosition = gl_FragCoord.xyz + fnorm * displacement;
+
+            // gl_FragDepth = displacedPosition.z;
         }
     )
     );
@@ -124,7 +189,7 @@ int main() {
                                // basically directional light from above
             // make it checkerboard
             const float sz = 0.1;
-            if ((mod(fuv.x, sz) > sz*0.5) ^^  (mod(fuv.y, sz) > sz*0.5)) {
+            if ((mod(fuv.x, sz) > sz*0.5) ^^ (mod(fuv.y, sz) > sz*0.5)) {
                 v *= 0.25;
             }
             
@@ -201,13 +266,15 @@ int main() {
 
     while (instance.update()) {
         
+auto start_time = std::chrono::high_resolution_clock::now();
+
         // cpu: wait for the thing to be done
         dev.wait(fence_wait_frame);
 
         // get an image from the screen -- blocks
         vk::Image& screen = dev.getSwapchainImage(VK_NULL_HANDLE, sem_img_avail);
 
-auto start_time = std::chrono::high_resolution_clock::now();
+auto wait_time = std::chrono::high_resolution_clock::now();
 
         screen.view({
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
@@ -221,7 +288,7 @@ auto start_time = std::chrono::high_resolution_clock::now();
         // rotate the monke
         monke.rotation = 
             glm::angleAxis(3.1415f / 2.f, glm::vec3(-1., 0., 0.)) *
-            glm::angleAxis(10 * t, glm::vec3(0, 0, 1));
+            glm::angleAxis(t, glm::vec3(0, 0, 1));
         
 
 //----------------------------------------------//
@@ -313,8 +380,8 @@ auto start_time = std::chrono::high_resolution_clock::now();
             // bind the postprocessor
             cmd.bindPipeline(postprocess);  
 
-            uint32_t groupCountX = (2560 + 15) / 16;  // Round up division
-            uint32_t groupCountY = (1440 + 15) / 16;
+            uint32_t groupCountX = (2560 + 31) / 32;  // Round up division
+            uint32_t groupCountY = (1440 + 31) / 32;
 
             // apply the shader
             cmd.dispatch(groupCountX, groupCountY, 1);
@@ -330,14 +397,22 @@ auto start_time = std::chrono::high_resolution_clock::now();
 //----------------------------------------------//
 //  Loop - Submit
 //----------------------------------------------//
+        
+        // graphics.submit(VK_NULL_HANDLE,
+        //     {sem_img_avail}, {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
+        //     {sem_render_finish});
+
+        // compute.submit(fence_wait_frame,
+        //     {sem_render_finish}, {VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT},
+        //     {sem_post_finish});
+        
+        // if we assume that we're on an igpu and graphics and compute are on the same qf
 
         graphics.submit(VK_NULL_HANDLE,
-            {sem_img_avail}, {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
-            {sem_render_finish});
+            {sem_img_avail}, {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT}, {/* auto sync */});
 
         compute.submit(fence_wait_frame,
-            {sem_render_finish}, {VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT},
-            {sem_post_finish});
+            {/*auto sync*/}, {/*auto sync*/}, {sem_post_finish});
         
         // throw the image onto the screen
         presentation.present(screen, {sem_post_finish});
@@ -345,10 +420,14 @@ auto start_time = std::chrono::high_resolution_clock::now();
 auto end_time = std::chrono::high_resolution_clock::now();
 
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+        auto waitduration = std::chrono::duration_cast<std::chrono::microseconds>(wait_time - start_time);
 
         t += duration.count() / 1000000.0;
 
-        printf(" frametime: %3.3f ms  fps: %3.1f  \r", duration.count() / 1000.0, 1000000.0 / duration.count());
+        printf(" frametime: %03.3f ms (idle %03.3f ms) fps: %03.1f  \r",
+                duration.count() / 1000.0,
+                waitduration.count() / 1000.0,
+                1000000.0 / duration.count());
         fflush(stdout);
     }
 

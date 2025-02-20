@@ -1,2 +1,0 @@
-#version 450
-layout (location = 0) in vec3 vertpos; layout (location = 1) in vec3 vertcol; layout (location = 0) out vec3 fragcol; void main() { gl_Position = vec4(vertpos, 1.0); fragcol = vertcol; }
