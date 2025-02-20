@@ -61,6 +61,9 @@ public:
     // mirrors vkCmdDrawIndexed(num_idx, num_instances)
     void drawIndexed(uint32_t, uint32_t);
 
+    // mirrors vkCmdDispatch(x, y, z)
+    void dispatch(uint32_t, uint32_t, uint32_t);
+
     // wraps vkCmdSetViewport and vkCmdSetScissor
     void setRenderArea(VkViewport, VkRect2D);
 
@@ -209,6 +212,11 @@ void CommandBuffer::setRenderArea(VkViewport v, VkRect2D s){
 // vkCmdDraw
 void CommandBuffer::draw(uint32_t verts, uint32_t inst) {
     vkCmdDraw(cmd, verts, inst, 0, 0);
+}
+
+// vkCmdDispatch
+void CommandBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z) {
+    vkCmdDispatch(cmd, x, y, z);
 }
 
 // vkCmdDrawIndexed

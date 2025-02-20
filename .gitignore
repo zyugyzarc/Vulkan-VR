@@ -14,3 +14,7 @@ vkdemo
 *.spv
 
 *.vert
+
+*.o
+
+*.comp

@@ -29,10 +29,6 @@ std::string  _shader_vert_default = SHADERCODE(
     }
 );
 
-// vec3 linearToSRGB(vec3 color) {
-//     return mix(pow(color, vec3(1.0 / 2.4)) * 1.055 - 0.055, color * 12.92, lessThan(color, vec3(0.0031308)));
-// }
-
 int main() {
 
 //----------------------------------------------//
@@ -53,11 +49,38 @@ int main() {
     // synch structures
     VkSemaphore sem_img_avail = dev.semaphore();
     VkSemaphore sem_render_finish = dev.semaphore();
+    VkSemaphore sem_post_finish = dev.semaphore();
     VkFence fence_wait_frame = dev.fence(true);
 
 //----------------------------------------------//
 //  Postprocessing Init
 //----------------------------------------------//
+
+    vk::ShaderModule& postprocess_sh = *new vk::ShaderModule(dev, "postprocess.comp",
+    SHADERCODE(
+        layout (binding = 0, rgba8) uniform readonly image2D imagein;
+        layout (binding = 1, rgba8) uniform writeonly image2D imageout;
+
+        layout(local_size_x = 16, local_size_y = 16) in;
+
+        vec3 linearToSRGB(vec3 color) {
+            return mix(pow(color, vec3(1.0 / 2.4)) * 1.055 - 0.055, color * 12.92, lessThan(color, vec3(0.0031308)));
+        }
+
+        void main() {
+            ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+            vec4 color = imageLoad(imagein, coord);
+
+            color.rgb = linearToSRGB(color.rgb);
+
+            imageStore(imageout, coord, color.bgra);  // for some reason it needs to be in bgra
+        }
+    ));
+
+    vk::Pipeline& postprocess = vk::Pipeline::Compute(dev, {{
+        {.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .stageFlags = VK_SHADER_STAGE_ALL},
+        {.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .stageFlags = VK_SHADER_STAGE_ALL}
+    }}, postprocess_sh);
 
 //----------------------------------------------//
 //  Object/Entity Initialization
@@ -139,7 +162,7 @@ int main() {
     // use as a render-target depth attachment
     vk::Image& depth_buffer = *new vk::Image(dev, {
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = VK_FORMAT_D32_SFLOAT,
+        .format = vk_DEPTH_FORMAT,
         .extent = {2560, 1440, 1},
         .tiling = VK_IMAGE_TILING_OPTIMAL,
         .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -147,7 +170,7 @@ int main() {
 
     depth_buffer.view({
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = VK_FORMAT_D32_SFLOAT,
+        .format = vk_DEPTH_FORMAT,
         .subresourceRange = {
         .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT}
     });
@@ -156,7 +179,7 @@ int main() {
     // use as draw's render target, and then postprocess with compute
     vk::Image& draw_raw = *new vk::Image(dev, {
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = VK_FORMAT_B8G8R8A8_UNORM,
+        .format = vk_COLOR_FORMAT,
         .extent = {2560, 1440, 1},
         .tiling = VK_IMAGE_TILING_OPTIMAL,
         .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
@@ -164,7 +187,7 @@ int main() {
 
     draw_raw.view({
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = VK_FORMAT_B8G8R8A8_UNORM,
+        .format = vk_COLOR_FORMAT,
         .subresourceRange = {
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
     });
@@ -188,7 +211,7 @@ auto start_time = std::chrono::high_resolution_clock::now();
 
         screen.view({
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = VK_FORMAT_B8G8R8A8_UNORM,
+            .format = vk_COLOR_FORMAT,
             .subresourceRange = {
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
         });
@@ -205,12 +228,12 @@ auto start_time = std::chrono::high_resolution_clock::now();
 //  Main - Draw
 //----------------------------------------------//
 
-        // record the commandbuffer
+        // record the commandbuffer for drawing
         graphics.command() << [&](vk::CommandBuffer& cmd) {
             
-            // set the image to be a color-attachment optimal
-            cmd.imageTransition(screen,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
+            // set the draw-raw to be a color-attachment optimal
+            cmd.imageTransition(draw_raw,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                 VK_IMAGE_ASPECT_COLOR_BIT
             );
@@ -227,7 +250,7 @@ auto start_time = std::chrono::high_resolution_clock::now();
             // set the render target
             cmd.beginRendering(
                 { VkRenderingAttachmentInfo{
-                  .imageView = (VkImageView) screen,
+                  .imageView = (VkImageView) draw_raw,
                   .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                   .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                   .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -261,26 +284,63 @@ auto start_time = std::chrono::high_resolution_clock::now();
             // end rendering
             cmd.endRendering();
 
-            // set the image to be a present-optimal
-            cmd.imageTransition(screen,
+        };
+
+        // TODO
+        // record the commandbuffer for post-processing
+        compute.command() << [&](vk::CommandBuffer& cmd) {
+
+            // set the draw-raw to be a storage-optimal
+            cmd.imageTransition(draw_raw,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
+                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_IMAGE_ASPECT_COLOR_BIT
             );
 
-        };
+            // now set the screen to be storage-optimal (for write)
+            cmd.imageTransition(screen,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
 
+
+            // bind the images
+            postprocess.descriptorSet(0);
+            postprocess.writeDescriptor(0, 0, draw_raw, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            postprocess.writeDescriptor(0, 1, screen, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+
+            // bind the postprocessor
+            cmd.bindPipeline(postprocess);  
+
+            uint32_t groupCountX = (2560 + 15) / 16;  // Round up division
+            uint32_t groupCountY = (1440 + 15) / 16;
+
+            // apply the shader
+            cmd.dispatch(groupCountX, groupCountY, 1);
+
+            // turn the screen to present optimal
+            cmd.imageTransition(screen,
+                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
+        };
 
 //----------------------------------------------//
 //  Loop - Submit
 //----------------------------------------------//
 
-        graphics.submit(fence_wait_frame,
+        graphics.submit(VK_NULL_HANDLE,
             {sem_img_avail}, {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
             {sem_render_finish});
+
+        compute.submit(fence_wait_frame,
+            {sem_render_finish}, {VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT},
+            {sem_post_finish});
         
         // throw the image onto the screen
-        presentation.present(screen, {sem_render_finish});
+        presentation.present(screen, {sem_post_finish});
 
 auto end_time = std::chrono::high_resolution_clock::now();
 
@@ -304,9 +364,14 @@ auto end_time = std::chrono::high_resolution_clock::now();
     delete &plane_mesh;
 
     delete &depth_buffer;
+    delete &draw_raw;
+
+    delete &postprocess;
+    delete &postprocess_sh;
 
     delete &graphics;
     delete &presentation;
+    delete &compute;
 
     delete &dev;
     delete &instance;

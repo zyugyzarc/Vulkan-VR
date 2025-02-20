@@ -255,8 +255,7 @@ void Device::createswapchain() {
 
     // 32-bit RGBA in sRGB
     VkSurfaceFormatKHR format {
-        // .format = vk_COLOR_FORMAT,
-        .format = VK_FORMAT_B8G8R8A8_UNORM,
+        .format = vk_COLOR_FORMAT,
         .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
     };
 
