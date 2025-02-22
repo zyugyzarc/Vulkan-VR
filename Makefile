@@ -28,3 +28,10 @@ $(TARGET): $(OBJS)
 # Clean up generated files
 clean:
 	@rm -f $(OBJS)
+
+# new stuff
+
+cvtest:
+	g++ 360util/webcam.cpp -c -o 360util/webcam.o `pkg-config --cflags --libs opencv4` -lcurl
+	g++ 360util/webcam_test.cpp -c -o 360util/webcam_test.o `pkg-config --cflags --libs opencv4` -lcurl
+	g++ -o cmdemo 360util/webcam.o 360util/webcam_test.o `pkg-config --cflags --libs opencv4` -lcurl

@@ -37,7 +37,7 @@ int main() {
 //----------------------------------------------//
 
     // create the instance and the device    
-    vk::Instance& instance = *new vk::Instance("Funny monke", 2560, 1440);
+    vk::Instance& instance = *new vk::Instance("Funny monke", 1920, 1080);
     vk::Device& dev = *new vk::Device(instance);
 
     // create the required queues
@@ -72,57 +72,55 @@ int main() {
         void main() {
             ivec2 coord = ivec2(gl_GlobalInvocationID.xy); 
             ivec2 coord_final = coord;
-
-            float K_1 = 5. / (2560.*1440.);
-            float K_2 = 5. / (2560.*2560.*1440.*1440.);
-            float r2;
-            vec2 sc;
+            
+            float K_x1 = 0.; // const
+            float K_x2 = 1.; // * x
+            float K_x3 = 0.; // * x * y
+            
+            float K_y1 = 0.; // const
+            float K_y2 = 0.; // * x
+            float K_y3 = 1.; // * y
+            float K_y4 = 0.23 / 1920.; // * x * x
+            float K_y5 = -.03 / 1080.; // * y * y
 
             // distortion correction:
-            if (coord.x < 2560 / 2) {
+            if (coord.x < 1920 / 2) {
                 // left image
-                coord -= ivec2(2560/4, 1440/2); // pre transform
-                r2 = coord.x*coord.x + coord.y*coord.y; // r
-                sc = vec2(1 + K_1 * r2 + K_2 * r2 * r2); // transform
-                coord = ivec2(sc * vec2(coord));
-                coord +=  ivec2(2560/4, 1440/2); // post transform
+                coord -= ivec2(1920/4, 1080/2); // pre transform
+                
+                vec2 cu = coord;
+                
+                // transform
+                coord.x = int(K_x1 + K_x2 * cu.x + K_x3 *cu.x *cu.y);
+                coord.y = int(K_y1 + K_y2 * cu.x + K_y3 *cu.y + K_y4*cu.x*cu.x + K_y5*cu.y*cu.y);
 
-                if (coord.x > 2560/2) {
+                coord +=  ivec2(1920/4, 1080/2); // post transform
+
+                if (coord.x > 1920/2) {
                     coord.x = 2561;
                 }
             }
             else {
                 // right image
-                coord -= ivec2(3*2560/4, 1440/2); // pre transform
-                r2 = coord.x*coord.x + coord.y*coord.y; // r
-                sc = vec2(1 + K_1 * r2 + K_2 * r2 * r2); // transform
-                coord = ivec2(sc * vec2(coord));
-                coord +=  ivec2(3*2560/4, 1440/2); // post transform
+                coord -= ivec2(3*1920/4, 1080/2); // pre transform
+                
+                vec2 cu = coord;
+                
+                // transform
+                coord.x = int(K_x1 + K_x2 * cu.x + K_x3 *cu.x *cu.y);
+                coord.y = int(K_y1 + K_y2 * cu.x + K_y3 *cu.y + K_y4*cu.x*cu.x + K_y5*cu.y*cu.y);
 
-                if (coord.x < 2560/2) {
+
+                coord +=  ivec2(3*1920/4, 1080/2); // post transform
+
+                if (coord.x < 1920/2) {
                     coord.x = -1;
                 }
             }
 
             vec4 color = imageLoad(imagein, coord).bgra;  // for some reason it needs to be in bgra
-            
-            // vec4 color = vec4(0.0);
-
-            // vec4 color = vec4(mod(float(coord.x), 100.) / 100., mod(float(coord.y), 100.) / 100., 0., 1.);
-
-            // const int kernsize = 2;
-            // const int samples = 2;
-
-            // for (int i = -kernsize; i < kernsize; i+=kernsize/samples) {
-            //     for (int j = -kernsize; j < kernsize; j+=kernsize/samples) {
-            //         vec4 c = imageLoad(imagein, coord + ivec2(i, j)).bgra;
-            //         color += c / float(samples * samples * 4);
-            //     }
-            // }
 
             color.rgb = linearToSRGB(color.rgb);
-
-            // color.rgb = color.bbb; // use only blue
 
             imageStore(imageout, coord_final, color);
         }
@@ -228,7 +226,7 @@ int main() {
     vk::Image& depth_buffer = *new vk::Image(dev, {
         .imageType = VK_IMAGE_TYPE_2D,
         .format = vk_DEPTH_FORMAT,
-        .extent = {2560, 1440, 1},
+        .extent = {1920, 1080, 1},
         .tiling = VK_IMAGE_TILING_OPTIMAL,
         .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
     },  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -245,7 +243,7 @@ int main() {
     vk::Image& draw_raw = *new vk::Image(dev, {
         .imageType = VK_IMAGE_TYPE_2D,
         .format = vk_COLOR_FORMAT,
-        .extent = {2560, 1440, 1},
+        .extent = {1920, 1080, 1},
         .tiling = VK_IMAGE_TILING_OPTIMAL,
         .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
     },  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -329,7 +327,7 @@ auto wait_time = std::chrono::high_resolution_clock::now();
                     .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                     .clearValue = 1.f //VkClearDepthStencilValue{1.0f, 0u},
                 },
-                {{0, 0}, {2560, 1440}}
+                {{0, 0}, {1920, 1080}}
             );
 
             // go form eye=-1 to eye=1
@@ -337,8 +335,8 @@ auto wait_time = std::chrono::high_resolution_clock::now();
                 // set render area (L)
                 sc::camera.eye = eye;
                 cmd.setRenderArea(
-                    {2560.f / 4 * (1+eye), 0.f, 2560.f / 2, 1440.f, 0.f, 1.f}, // viewport
-                    {{2560 / 4 * (1+eye), 0}, {2560 / 2, 1440}} // scissor rect
+                    {1920.f / 4 * (1+eye), 0.f, 1920.f / 2, 1080.f, 0.f, 1.f}, // viewport
+                    {{1920 / 4 * (1+eye), 0}, {1920 / 2, 1080}} // scissor rect
                 );
 
                 // draw the monke
@@ -380,8 +378,8 @@ auto wait_time = std::chrono::high_resolution_clock::now();
             // bind the postprocessor
             cmd.bindPipeline(postprocess);  
 
-            uint32_t groupCountX = (2560 + 31) / 32;  // Round up division
-            uint32_t groupCountY = (1440 + 31) / 32;
+            uint32_t groupCountX = (1920 + 31) / 32;  // Round up division
+            uint32_t groupCountY = (1080 + 31) / 32;
 
             // apply the shader
             cmd.dispatch(groupCountX, groupCountY, 1);

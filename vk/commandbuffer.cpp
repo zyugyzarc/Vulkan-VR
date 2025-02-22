@@ -67,6 +67,9 @@ public:
     // wraps vkCmdSetViewport and vkCmdSetScissor
     void setRenderArea(VkViewport, VkRect2D);
 
+    // wraps vkCmdImageBlit
+    void blit(Image&, VkImageLayout, VkOffset3D, Image&, VkImageLayout, VkOffset3D, VkImageAspectFlags);
+
 
     // transitions an image from one VkImageLayout to another
     void imageTransition(
@@ -222,6 +225,33 @@ void CommandBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z) {
 // vkCmdDrawIndexed
 void CommandBuffer::drawIndexed(uint32_t verts, uint32_t inst) {
     vkCmdDrawIndexed(cmd, verts, inst, 0, 0, 0);
+}
+
+// vkCmdImageBlit
+void CommandBuffer::blit(Image& src, VkImageLayout srcl, VkOffset3D srcext, Image& dst, VkImageLayout dstl, VkOffset3D dstext, VkImageAspectFlags aspect) {
+    VkImageBlit blt {
+        .srcSubresource = {
+            .aspectMask = aspect,
+            .layerCount = 1
+        },
+        .srcOffsets = {
+            {0, 0, 0}, srcext
+        },
+        .dstSubresource = {
+            .aspectMask = aspect,
+            .layerCount = 1
+        },
+        .dstOffsets = {
+            {0, 0, 0}, dstext
+        },
+    };
+    vkCmdBlitImage(
+        cmd,
+        src, srcl,
+        dst, dstl,
+        1, &blt,
+        VK_FILTER_LINEAR
+    );
 }
 
 // vkCmdEndRendering

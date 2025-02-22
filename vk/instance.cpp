@@ -66,18 +66,18 @@ Instance::Instance (std::string windowname, int width, int height) {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    // glfwWindowHint(GLFW_DECORATED, 0);
+    glfwWindowHint(GLFW_DECORATED, 0);
 
     // select the last monitor
     GLFWmonitor* fullscreen = NULL;
 
-    // int num_monitors;
-    // GLFWmonitor** glfwmonitors = glfwGetMonitors(&num_monitors);
-    // fullscreen = glfwmonitors[num_monitors - 1];
+    int num_monitors;
+    GLFWmonitor** glfwmonitors = glfwGetMonitors(&num_monitors);
+    fullscreen = glfwmonitors[num_monitors - 1];
 
-    // if (num_monitors <= 0) {
-    //     throw std::runtime_error("no monitors");
-    // }
+    if (num_monitors <= 0) {
+        throw std::runtime_error("no monitors");
+    }
 
     // const GLFWvidmode* mode = glfwGetVideoMode(fullscreen);
 
