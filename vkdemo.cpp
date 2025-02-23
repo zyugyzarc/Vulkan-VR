@@ -1,5 +1,6 @@
 #include "vk/vklib.h"
 #include "sc/scenes.h"
+#include "360util/webcam.h"
 
 #include <iostream>
 #include <string>
@@ -52,6 +53,13 @@ int main() {
     VkSemaphore sem_render_finish = dev.semaphore();
     VkSemaphore sem_post_finish = dev.semaphore();
     VkFence fence_wait_frame = dev.fence(true);
+
+//----------------------------------------------//
+//  Webcam init
+//----------------------------------------------//
+
+    cm::Webcam& probecam = *new cm::Webcam(dev);
+    probecam.startStreaming();
 
 //----------------------------------------------//
 //  Postprocessing Init
@@ -118,7 +126,7 @@ int main() {
                 }
             }
 
-            vec4 color = imageLoad(imagein, coord).bgra;  // for some reason it needs to be in bgra
+            vec4 color = imageLoad(imagein, coord).bgra;  // for some reason the render output is in bgra
 
             color.rgb = linearToSRGB(color.rgb);
 
@@ -266,6 +274,9 @@ int main() {
         
 auto start_time = std::chrono::high_resolution_clock::now();
 
+        // network: wait for image
+        vk::Image& probeimg = probecam.getNextImage();
+
         // cpu: wait for the thing to be done
         dev.wait(fence_wait_frame);
 
@@ -310,6 +321,13 @@ auto wait_time = std::chrono::high_resolution_clock::now();
                     VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
                     , VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                 VK_IMAGE_ASPECT_DEPTH_BIT
+            );
+
+            // add camera image as texture
+            cmd.imageTransition(probeimg,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT
             );
 
             // set the render target
@@ -369,10 +387,10 @@ auto wait_time = std::chrono::high_resolution_clock::now();
                 VK_IMAGE_ASPECT_COLOR_BIT
             );
 
-
             // bind the images
             postprocess.descriptorSet(0);
-            postprocess.writeDescriptor(0, 0, draw_raw, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            // postprocess.writeDescriptor(0, 0, draw_raw, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            postprocess.writeDescriptor(0, 0, probeimg, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
             postprocess.writeDescriptor(0, 1, screen, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
             // bind the postprocessor
@@ -445,6 +463,9 @@ auto end_time = std::chrono::high_resolution_clock::now();
 
     delete &postprocess;
     delete &postprocess_sh;
+
+    probecam.stopStreaming();
+    delete &probecam;
 
     delete &graphics;
     delete &presentation;

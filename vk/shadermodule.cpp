@@ -86,18 +86,18 @@ ShaderModule::ShaderModule(Device& d, std::string filename, std::string code) : 
         this->type = VK_SHADER_STAGE_COMPUTE_BIT;
     }
 
-    std::ofstream glfile("assets/" + filename, std::ios::out);
+    std::ofstream glfile("/tmp/" + filename, std::ios::out);
     glfile << "#version 450\n";
     glfile << code;
     glfile.close();
 
     if ( 0 != 
-        system(("./.util/glslc -g \"assets/" + filename + "\" -o \"assets/" + filename + ".spv\"").c_str())
+        system(("./.util/glslc -g \"/tmp/" + filename + "\" -o \"/tmp/" + filename + ".spv\"").c_str())
     ) {
         throw std::runtime_error("shader compile failed");
     }
 
-    std::ifstream spvfile("assets/" + filename + ".spv", std::ios::ate | std::ios::binary);
+    std::ifstream spvfile("/tmp/" + filename + ".spv", std::ios::ate | std::ios::binary);
 
     size_t fileSize = (size_t) spvfile.tellg();
     std::vector<char> bcode(fileSize);

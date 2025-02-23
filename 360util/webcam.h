@@ -1,6 +1,9 @@
 #ifndef WEBCAM_H
 #define WEBCAM_H
 
+// Thanks to
+// https://community.theta360.guide/t/preview-mjpeg-stream-on-a-ricoh-theta-x-with-python-and-opencv/8919/7
+
 #include <vector>
 #include <thread>
 #include <mutex>
@@ -8,23 +11,26 @@
 #include <atomic>
 #include <string>
 
-class Image {
-    unsigned char data[1024 * 1024 * 32];
-public:
-    uint32_t width, height;
-    Image(uint32_t w, uint32_t h) : width(w), height(h) {};
-    void* map() {return data;}
-    void unmap(void*) {/*no-op*/}
-};
+#ifndef HEADER
+    #define HEADER
+        #include "../vk/device.cpp"
+        #include "../vk/image.cpp"
+    #undef HEADER
+#else
+    #include "../vk/device.cpp"
+    #include "../vk/image.cpp"
+#endif
+
+namespace cm {
 
 class Webcam {
 public:
-    Webcam();
+    Webcam(vk::Device&);
     ~Webcam();
 
     void startStreaming();
     void stopStreaming();
-    Image& getNextImage();
+    vk::Image& getNextImage();
 
     static constexpr size_t BUFFER_SIZE = 5;  // Ring buffer size
 
@@ -36,7 +42,7 @@ private:
     std::condition_variable bufferCondVar;
     std::atomic<bool> running;
 
-    std::vector<Image*> imageBuffer;
+    std::vector<vk::Image*> imageBuffer;
     size_t head;
     size_t tail;
     bool isBufferFull;
@@ -45,6 +51,8 @@ private:
     std::vector<uint8_t> streamBuffer;  // Buffer for incoming data
 
     friend size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp);
+};
+
 };
 
 #endif // WEBCAM_H

@@ -25,6 +25,9 @@ class Image {
     VkImage image;
     VkImageView imview = VK_NULL_HANDLE;
     VkDeviceMemory mem = VK_NULL_HANDLE;
+
+    void* _mapped_ptr = nullptr;
+    uint32_t memsize;
 public:
     
     // wrap an existsing image
@@ -35,6 +38,12 @@ public:
     // create a new image
     Image(Device& d, VkImageCreateInfo, VkMemoryPropertyFlags);
 
+    void* map();
+    void unmap(void*&);
+
+    template <typename func_t>
+    void mapped(func_t);
+
     ~Image();
 
     // allow creation of imageViews
@@ -44,6 +53,13 @@ public:
     operator VkImage() {return image;}
     operator VkImageView() {return imview;}
 };
+
+template <typename func_t>
+void Image::mapped(func_t func) {
+    void* ptr = map();
+    func(ptr);
+    unmap(ptr);
+}
 
 }; // end of instance.h file
 #ifndef HEADER
@@ -100,6 +116,8 @@ Image::Image (Device& d, VkImageCreateInfo info, VkMemoryPropertyFlags memflags)
     throw std::runtime_error("Failed to find device memory");
 found_heap_index:
 
+    memsize = memRequirements.size;
+
     VkMemoryAllocateInfo alloc {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .allocationSize = memRequirements.size,
@@ -110,6 +128,21 @@ found_heap_index:
 
     // ok cool, new image now
     vkBindImageMemory(device, image, mem, 0);
+}
+
+
+// maps the memory held by this image
+void* Image::map() {
+    if (_mapped_ptr != nullptr) return _mapped_ptr;
+    vkMapMemory(device, mem, 0, memsize, 0, &_mapped_ptr);
+    return _mapped_ptr;
+}
+
+// unmaps (and flushes) the memory allocated by map()
+void Image::unmap(void*& ptr) {
+    vkUnmapMemory(device, mem);
+    _mapped_ptr = nullptr;
+    ptr = nullptr;
 }
 
 
