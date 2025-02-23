@@ -70,7 +70,6 @@ public:
     // wraps vkCmdImageBlit
     void blit(Image&, VkImageLayout, VkOffset3D, Image&, VkImageLayout, VkOffset3D, VkImageAspectFlags);
 
-
     // transitions an image from one VkImageLayout to another
     void imageTransition(
         Image&,

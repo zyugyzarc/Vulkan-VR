@@ -27,6 +27,10 @@ public:
     Instance(std::string, int, int);
     ~Instance();
 
+    // other args (dont modify pls)
+    uint32_t width;
+    uint32_t height;
+
     // updates the screen:
     // polls GLFW events and handles window events
     bool update();
@@ -66,24 +70,33 @@ Instance::Instance (std::string windowname, int width, int height) {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_DECORATED, 0);
+    // glfwWindowHint(GLFW_DECORATED, 0);
 
     // select the last monitor
     GLFWmonitor* fullscreen = NULL;
 
     int num_monitors;
     GLFWmonitor** glfwmonitors = glfwGetMonitors(&num_monitors);
-    fullscreen = glfwmonitors[num_monitors - 1];
+    // fullscreen = glfwmonitors[num_monitors - 1];
+    fullscreen = glfwmonitors[0];
 
     if (num_monitors <= 0) {
         throw std::runtime_error("no monitors");
     }
 
-    // const GLFWvidmode* mode = glfwGetVideoMode(fullscreen);
+    const GLFWvidmode* mode = glfwGetVideoMode(fullscreen);
 
-    window = glfwCreateWindow(width, height, windowname.c_str(), fullscreen, nullptr);
+    width = (int)(mode->width * 2 + 250);
+    height = (int)(mode->height * 2 + 100);
 
-    // glfwSetWindowMonitor(window, fullscreen, 0, 0, mode->width, mode->height, mode->refreshRate);
+    this->width = width;
+    this->height = height;
+
+    window = glfwCreateWindow( width, height, windowname.c_str(), fullscreen, nullptr);
+
+    printf("new window (%dx%d)\n", width, height);
+
+    // glfwSetWindowMonitor(window, fullscreen, 0, 0, (width, (int)(mode->height * 1.25), mode->refreshRate);
 
     // get required extensions
     uint32_t glfwExtensionCount = 0;

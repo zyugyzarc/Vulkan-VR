@@ -38,13 +38,14 @@ int main() {
 //----------------------------------------------//
 
     // create the instance and the device    
-    vk::Instance& instance = *new vk::Instance("Funny monke", 1920, 1080);
+    vk::Instance& instance = *new vk::Instance("Funny monke", (int)(2560*1.5), (int)(1440*1.5));
     vk::Device& dev = *new vk::Device(instance);
 
     // create the required queues
     vk::Queue& graphics = dev.create_queue(VK_QUEUE_GRAPHICS_BIT);
     vk::Queue& presentation = dev.create_queue(VK_QUEUE_PRESENTATION_BIT);
     vk::Queue& compute = dev.create_queue(VK_QUEUE_COMPUTE_BIT);
+    vk::Queue& transfer = dev.create_queue(VK_QUEUE_TRANSFER_BIT);
 
     dev.init();  // initialize the device
 
@@ -58,8 +59,8 @@ int main() {
 //  Webcam init
 //----------------------------------------------//
 
-    cm::Webcam& probecam = *new cm::Webcam(dev);
-    probecam.startStreaming();
+    // cm::Webcam& probecam = *new cm::Webcam(dev);
+    // probecam.startStreaming();
 
 //----------------------------------------------//
 //  Postprocessing Init
@@ -263,6 +264,23 @@ int main() {
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
     });
 
+    // offscreen image
+    // final image, blit this to the output swapchain image
+    vk::Image& target_final = *new vk::Image(dev, {
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = vk_COLOR_FORMAT,
+        .extent = {1920, 1080, 1},
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+    },  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    target_final.view({
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = vk_COLOR_FORMAT,
+        .subresourceRange = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
+    });
+
 
 //----------------------------------------------//
 //  Main Loop
@@ -275,7 +293,7 @@ int main() {
 auto start_time = std::chrono::high_resolution_clock::now();
 
         // network: wait for image
-        vk::Image& probeimg = probecam.getNextImage();
+        // vk::Image& probeimg = probecam.getNextImage();
 
         // cpu: wait for the thing to be done
         dev.wait(fence_wait_frame);
@@ -324,11 +342,11 @@ auto wait_time = std::chrono::high_resolution_clock::now();
             );
 
             // add camera image as texture
-            cmd.imageTransition(probeimg,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
-                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                VK_IMAGE_ASPECT_COLOR_BIT
-            );
+            // cmd.imageTransition(probeimg,
+            //     VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+            //     VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+            //     VK_IMAGE_ASPECT_COLOR_BIT
+            // );
 
             // set the render target
             cmd.beginRendering(
@@ -381,7 +399,7 @@ auto wait_time = std::chrono::high_resolution_clock::now();
             );
 
             // now set the screen to be storage-optimal (for write)
-            cmd.imageTransition(screen,
+            cmd.imageTransition(target_final,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
                 VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
                 VK_IMAGE_ASPECT_COLOR_BIT
@@ -389,9 +407,9 @@ auto wait_time = std::chrono::high_resolution_clock::now();
 
             // bind the images
             postprocess.descriptorSet(0);
-            // postprocess.writeDescriptor(0, 0, draw_raw, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-            postprocess.writeDescriptor(0, 0, probeimg, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-            postprocess.writeDescriptor(0, 1, screen, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            postprocess.writeDescriptor(0, 0, draw_raw, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            // postprocess.writeDescriptor(0, 0, probeimg, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            postprocess.writeDescriptor(0, 1, target_final, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
             // bind the postprocessor
             cmd.bindPipeline(postprocess);  
@@ -402,9 +420,35 @@ auto wait_time = std::chrono::high_resolution_clock::now();
             // apply the shader
             cmd.dispatch(groupCountX, groupCountY, 1);
 
+        };
+
+        // record the commandbuffer to blit offscreen rt
+        transfer.command() << [&](vk::CommandBuffer& cmd) {
+
+            // now set the screen to be storage-optimal (for write)
+            cmd.imageTransition(target_final,
+                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
+
+            //
+            cmd.imageTransition(screen,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
+
+            // void blit(Image&, VkImageLayout, VkOffset3D, Image&, VkImageLayout, VkOffset3D, VkImageAspectFlags);
+            cmd.blit(
+                target_final, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, {1920, 1080, 1},
+                screen, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, {instance.width, instance.height, 1},
+                VK_IMAGE_ASPECT_COLOR_BIT 
+            );
+
             // turn the screen to present optimal
             cmd.imageTransition(screen,
-                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
                 VK_IMAGE_ASPECT_COLOR_BIT
             );
@@ -427,7 +471,10 @@ auto wait_time = std::chrono::high_resolution_clock::now();
         graphics.submit(VK_NULL_HANDLE,
             {sem_img_avail}, {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT}, {/* auto sync */});
 
-        compute.submit(fence_wait_frame,
+        compute.submit(VK_NULL_HANDLE,
+            {/*auto sync*/}, {/*auto sync*/}, {/* auto sync */});
+
+        transfer.submit(fence_wait_frame,
             {/*auto sync*/}, {/*auto sync*/}, {sem_post_finish});
         
         // throw the image onto the screen
@@ -464,12 +511,13 @@ auto end_time = std::chrono::high_resolution_clock::now();
     delete &postprocess;
     delete &postprocess_sh;
 
-    probecam.stopStreaming();
-    delete &probecam;
+    // probecam.stopStreaming();
+    // delete &probecam;
 
     delete &graphics;
     delete &presentation;
     delete &compute;
+    delete &transfer;
 
     delete &dev;
     delete &instance;
