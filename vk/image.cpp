@@ -26,6 +26,8 @@ class Image {
     VkImageView imview = VK_NULL_HANDLE;
     VkDeviceMemory mem = VK_NULL_HANDLE;
 
+    VkSampler _sampler = VK_NULL_HANDLE;
+
     void* _mapped_ptr = nullptr;
     uint32_t memsize;
 public:
@@ -37,6 +39,9 @@ public:
 
     // create a new image
     Image(Device& d, VkImageCreateInfo, VkMemoryPropertyFlags);
+
+    // create a sampler
+    VkSampler sampler();
 
     void* map();
     void unmap(void*&);
@@ -130,6 +135,28 @@ found_heap_index:
     vkBindImageMemory(device, image, mem, 0);
 }
 
+VkSampler Image::sampler() {
+
+    if (_sampler != VK_NULL_HANDLE) {
+        return _sampler;
+    }
+
+    VkSamplerCreateInfo samplerInfo {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .anisotropyEnable = VK_FALSE,
+        .compareEnable = VK_FALSE,
+        .unnormalizedCoordinates = VK_FALSE,
+    };
+
+    VK_ASSERT(vkCreateSampler(device, &samplerInfo, nullptr, &_sampler));
+
+    return _sampler;
+}
 
 // maps the memory held by this image
 void* Image::map() {

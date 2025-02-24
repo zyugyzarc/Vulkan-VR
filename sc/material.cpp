@@ -36,6 +36,8 @@ public:
 
     void descriptorSet(uint32_t);
     void writeDescriptor(uint32_t, uint32_t, vk::Buffer&, VkDescriptorType);
+
+    operator vk::Pipeline&() {return *pipe;};
 };
 
 }; // end of instance.h file
@@ -50,7 +52,8 @@ Material::Material (vk::Device& d, std::string name, std::string vscode, std::st
     pipe = &vk::Pipeline::Graphics(
         d, 
         { // descriptor inputs
-            {{.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .stageFlags = VK_SHADER_STAGE_ALL}},
+            {{.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .stageFlags = VK_SHADER_STAGE_ALL},
+             {.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}}, // theres the texture
             // single uniform for everything, for now
             // RGB textures in the future
         },

@@ -26,6 +26,7 @@ std::string  _shader_vert_default = SHADERCODE(
         gl_Position = tf.proj * tf.view * tf.model * vec4(pos, 1.)
                     ; // + vec4(0., sin(pos.x * 10 + tf.t * 30) * 0.1, 0., 0.);
         fnorm = (tf.norm * vec4(norm, 1.0)).xyz;
+        // fnorm = norm;
 
         fuv = uv;
     }
@@ -59,8 +60,8 @@ int main() {
 //  Webcam init
 //----------------------------------------------//
 
-    // cm::Webcam& probecam = *new cm::Webcam(dev);
-    // probecam.startStreaming();
+    cm::Webcam& probecam = *new cm::Webcam(dev);
+    probecam.startStreaming();
 
 //----------------------------------------------//
 //  Postprocessing Init
@@ -145,7 +146,8 @@ int main() {
 //----------------------------------------------//
 
     // initialize monke
-    sc::Mesh& monke_mesh = *new sc::Mesh(dev, "suzane.obj");
+    // sc::Mesh& monke_mesh = *new sc::Mesh(dev, "suzane.obj");
+    sc::Mesh& monke_mesh = *new sc::Mesh(dev, "sphere.obj");
 
     sc::Material& monke_mat = *new sc::Material(dev, "default_mat", 
     _shader_vert_default,
@@ -157,16 +159,35 @@ int main() {
             mat4 proj;
             float t;
         } tf;
+        layout (set = 0, binding = 1) uniform sampler2D probeimg;
 
         layout (location = 0) in vec3 fnorm;
         layout (location = 1) in vec2 fuv;
 
         layout (location = 0) out vec4 col;
+
+        float lerp (float v, float i0, float i1, float o0, float o1) {
+            return o0 + (o1 - o0) * (v - i0) / (i1 - i0);
+        }
         
         void main() {
             float v = fnorm.y; // ah yes, classic lighting
                                // basically directional light from above
-            col = vec4(v, v*0.5, v*0.25, 1.0);
+            // col = vec4(v, v*0.5, v*0.25, 1.0);
+            
+            // use spherical coordinates
+            // convert normal to a lattitude and longitude
+
+            vec2 spcoord = vec2(
+                lerp(atan(fnorm.z, fnorm.x), -3.1415, 3.1415, 0, 1),
+                lerp(-fnorm.y, -1, 1, 0, 1)
+            );
+
+            // rotate the spcoord a little
+            spcoord.x = mod(spcoord.x - 0.25, 1.0);
+
+            col = texture(probeimg, spcoord).bgra;
+            col.a = 1.f;
 
             // float displacement = sin(gl_FragCoord.x /100. + tf.t * 30) * 0.05;
 
@@ -293,7 +314,15 @@ int main() {
 auto start_time = std::chrono::high_resolution_clock::now();
 
         // network: wait for image
-        // vk::Image& probeimg = probecam.getNextImage();
+        vk::Image& probeimg = probecam.getNextImage();
+
+        probeimg.view({
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = vk_COLOR_FORMAT,
+            .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
+        });
+        probeimg.sampler();
 
         // cpu: wait for the thing to be done
         dev.wait(fence_wait_frame);
@@ -342,11 +371,11 @@ auto wait_time = std::chrono::high_resolution_clock::now();
             );
 
             // add camera image as texture
-            // cmd.imageTransition(probeimg,
-            //     VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
-            //     VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-            //     VK_IMAGE_ASPECT_COLOR_BIT
-            // );
+            cmd.imageTransition(probeimg,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
 
             // set the render target
             cmd.beginRendering(
@@ -376,7 +405,15 @@ auto wait_time = std::chrono::high_resolution_clock::now();
                 );
 
                 // draw the monke
-                monke.draw(cmd);
+                // monke.draw(cmd);
+
+                monke_mat.descriptorSet(0); // init descriptor set
+                monke.set_transforms(cmd); // writes the transforms into monke_mat (set=0, binding=0)
+                ((vk::Pipeline&)monke_mat).writeDescriptor(0, 1, probeimg, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+                monke_mat.bind(cmd); // bind the pipeline
+
+                monke_mesh.draw(cmd);
 
                 // draw the plane
                 plane_001.draw(cmd);
@@ -384,6 +421,13 @@ auto wait_time = std::chrono::high_resolution_clock::now();
 
             // end rendering
             cmd.endRendering();
+
+            // set the camera image back to normal
+            cmd.imageTransition(probeimg,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
 
         };
 
@@ -425,21 +469,21 @@ auto wait_time = std::chrono::high_resolution_clock::now();
         // record the commandbuffer to blit offscreen rt
         transfer.command() << [&](vk::CommandBuffer& cmd) {
 
-            // now set the screen to be storage-optimal (for write)
+            // now set the target_final to be transfer src
             cmd.imageTransition(target_final,
                 VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                 VK_IMAGE_ASPECT_COLOR_BIT
             );
 
-            //
+            // set th screen to be transfer dst
             cmd.imageTransition(screen,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
                 VK_IMAGE_ASPECT_COLOR_BIT
             );
 
-            // void blit(Image&, VkImageLayout, VkOffset3D, Image&, VkImageLayout, VkOffset3D, VkImageAspectFlags);
+            // blut the target onto the screen
             cmd.blit(
                 target_final, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, {1920, 1080, 1},
                 screen, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, {instance.width, instance.height, 1},
@@ -511,8 +555,8 @@ auto end_time = std::chrono::high_resolution_clock::now();
     delete &postprocess;
     delete &postprocess_sh;
 
-    // probecam.stopStreaming();
-    // delete &probecam;
+    probecam.stopStreaming();
+    delete &probecam;
 
     delete &graphics;
     delete &presentation;

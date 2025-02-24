@@ -47,6 +47,7 @@ public:
 
     ~Entity();
 
+    void set_transforms(vk::CommandBuffer&);
     void draw(vk::CommandBuffer&);
 };
 
@@ -67,9 +68,8 @@ Entity::Entity(vk::Device& d, Mesh& mh, Material& mt): mesh(mh), mat(mt)  {
     tbuf_idx = 0;
 }
 
-// draw the current entity
-void Entity::draw(vk::CommandBuffer& cmd) {
-
+// sets descriptor (set=0, binding=0) to the model's transforms. must call descriptorSet(0) beforehand.
+void Entity::set_transforms(vk::CommandBuffer& cmd) {
     uni_Transform_t* tf = (uni_Transform_t*) transforms[tbuf_idx]->map();
     
     // set up the transforms
@@ -84,17 +84,24 @@ void Entity::draw(vk::CommandBuffer& cmd) {
     tf->t += 1./60;
     
     // send it off to the shaders
-    mat.descriptorSet(0);
     mat.writeDescriptor(0, 0, *transforms[tbuf_idx], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+
+    // use the next buffer next time
+    tbuf_idx = (tbuf_idx + 1) % 8;
+}
+
+// draw the current entity
+void Entity::draw(vk::CommandBuffer& cmd) {
+
+    // send it off to the shaders
+    mat.descriptorSet(0);
+    set_transforms(cmd);
 
     // now bind the pipeline
     mat.bind(cmd);
 
     // we're all set to draw the mesh now
     mesh.draw(cmd);
-
-    // use the next buffer next time
-    tbuf_idx = (tbuf_idx + 1) % 8;
 }
 
 Entity::~Entity() {

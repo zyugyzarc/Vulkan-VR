@@ -36,7 +36,7 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
             
             // Decode image using stb_image
             int width, height, channels;
-            std::cout << "[STB] image with size " << width << "x" << height << "x" << channels << "\n";
+            // std::cout << "[STB] image with size " << width << "x" << height << "x" << channels << "\n";
             unsigned char* imgData = stbi_load_from_memory(jpgData.data(), jpgData.size(), &width, &height, &channels, 3);  // Force RGB
 
             if (imgData) {
@@ -85,7 +85,7 @@ Webcam::Webcam(vk::Device& d)
                 .format = VK_FORMAT_B8G8R8A8_UNORM,
                 .extent = {1024, 512, 1},
                 .tiling = VK_IMAGE_TILING_LINEAR,
-                .usage = VK_IMAGE_USAGE_STORAGE_BIT
+                .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
             },
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
         );

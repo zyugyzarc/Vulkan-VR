@@ -409,9 +409,11 @@ void Pipeline::writeDescriptor(uint32_t set, uint32_t binding, Buffer& buffer, V
 void Pipeline::writeDescriptor(uint32_t set, uint32_t binding, Image& image, VkDescriptorType imtype) {
 
     VkDescriptorImageInfo imageInfo {
-        .sampler = VK_NULL_HANDLE,
+        .sampler = imtype == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ?
+                        image.sampler() : VK_NULL_HANDLE,
         .imageView = (VkImageView) image,
-        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,  // todo - specialize ???
+        .imageLayout = imtype == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ?
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL,
     };
 
     VkWriteDescriptorSet descriptorWrite {
