@@ -325,11 +325,11 @@ void Device::createswapchain() {
 
 // helper function to copy a buffer. called by Buffer::staged()
 void Device::_copybuffer (Buffer& src, Buffer& dst) {
-    _stagerq->command() << [&](CommandBuffer& cmd) {
+    CommandBuffer& cmd = _stagerq->command() << [&](CommandBuffer& cmd) {
         VkBufferCopy copyRegion {.size = src.getsize()};
         vkCmdCopyBuffer((VkCommandBuffer) cmd, src, dst, 1, &copyRegion);
     };
-    _stagerq->submit(VK_NULL_HANDLE, {}, {}, {});
+    _stagerq->submit(cmd, VK_NULL_HANDLE, {}, {}, {});
 }
 
 Image& Device::getSwapchainImage (VkFence f, VkSemaphore s) {

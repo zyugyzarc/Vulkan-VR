@@ -51,21 +51,21 @@ class Pipeline {
     std::vector<std::vector<VkDescriptorSet>> descsets;
     std::vector<uint32_t> descset_index = std::vector<uint32_t>(_p_res_count);
 
+    std::vector<VkPushConstantRange> pushconstantranges;
+
     Pipeline(Device& d) : device(d) {}
     
-    void init_graphics(std::vector<std::vector<VkDescriptorSetLayoutBinding>>, std::vector<struct VertexInputBinding>,
+    void init_graphics(std::vector<std::vector<VkDescriptorSetLayoutBinding>>, std::vector<VkPushConstantRange>, std::vector<struct VertexInputBinding>,
                         ShaderModule&, std::vector<VkFormat>, VkFormat, ShaderModule&);
 
-    void init_compute(std::vector<std::vector<VkDescriptorSetLayoutBinding>>, ShaderModule&);
-
-    void init_descpools();
+    void init_compute(std::vector<std::vector<VkDescriptorSetLayoutBinding>>, std::vector<VkPushConstantRange>, ShaderModule&);
 
 public:
 
     // Factory function - Graphics: Creates a graphics pipeline with the given parameters
     static Pipeline& Graphics(
         Device& d,
-        std::vector<std::vector<VkDescriptorSetLayoutBinding>> descriptors,
+        std::vector<std::vector<VkDescriptorSetLayoutBinding>> descriptors, std::vector<VkPushConstantRange> pushconst,
         std::vector<struct VertexInputBinding> vertex_input, ShaderModule& v,
         std::vector<VkFormat> attachment_col, VkFormat attachment_depth, ShaderModule& f
     ) {
@@ -73,7 +73,7 @@ public:
         p->type = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
         p->init_graphics(
-            descriptors,
+            descriptors, pushconst,
             vertex_input, v,
             attachment_col, attachment_depth, f
         );
@@ -81,15 +81,19 @@ public:
         return *p;
     };
 
-    static Pipeline& Compute(Device& d,std::vector<std::vector<VkDescriptorSetLayoutBinding>> descriptors, ShaderModule& c) {
+    static Pipeline& Compute(Device& d,std::vector<std::vector<VkDescriptorSetLayoutBinding>> descriptors,
+                            std::vector<VkPushConstantRange> pushconst, ShaderModule& c) {
         Pipeline* p = new Pipeline(d); 
         p->type = VK_PIPELINE_BIND_POINT_COMPUTE;
-        p->init_compute(descriptors, c);
+        p->init_compute(descriptors, pushconst, c);
         return *p;
     };
 
     // return the current descriptor set
     std::vector<VkDescriptorSet> _getdescset();
+
+    // return the pushconstant ranges
+    std::vector<VkPushConstantRange> _getpcr() {return pushconstantranges;}
 
     void descriptorSet(uint32_t);
     void writeDescriptor(uint32_t, uint32_t, Buffer&, VkDescriptorType);
@@ -126,6 +130,7 @@ inline void _VkAssert (VkResult res, std::string file, int line) {
 // helper function used by the factory function / named constructor
 void Pipeline::init_graphics (
     std::vector<std::vector<VkDescriptorSetLayoutBinding>> descriptorsets,
+    std::vector<VkPushConstantRange> pushconst,
     std::vector<struct VertexInputBinding> vertex_input, ShaderModule& vert,
     std::vector<VkFormat> attachment_col, VkFormat attachment_depth, ShaderModule& frag
 ) {
@@ -246,11 +251,20 @@ void Pipeline::init_graphics (
         desc_layouts.push_back(desc_layout);
     }
 
+    // now create all the pushconstants
+    int curroff = 0;
+    for (auto& pkr: pushconst) {
+        pushconstantranges.push_back(pkr);
+        pkr.offset = curroff;
+        curroff += pkr.size;
+    }
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = (uint32_t) desc_layouts.size(),
-        .pSetLayouts = desc_layouts.data()
+        .pSetLayouts = desc_layouts.data(),
+        .pushConstantRangeCount = (uint32_t) pushconst.size(),
+        .pPushConstantRanges = pushconst.data()
     };
 
     VK_ASSERT( vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) );
@@ -431,7 +445,8 @@ void Pipeline::writeDescriptor(uint32_t set, uint32_t binding, Image& image, VkD
 
 
 // creates a new compute pipeline
-void Pipeline::init_compute (std::vector<std::vector<VkDescriptorSetLayoutBinding>> descriptorsets, ShaderModule& comp) {
+void Pipeline::init_compute (std::vector<std::vector<VkDescriptorSetLayoutBinding>> descriptorsets,
+                             std::vector<VkPushConstantRange> pushconst, ShaderModule& comp) {
 
 
     // the part where you add descriptors
@@ -460,11 +475,20 @@ void Pipeline::init_compute (std::vector<std::vector<VkDescriptorSetLayoutBindin
         desc_layouts.push_back(desc_layout);
     }
 
+    // now create all the pushconstants
+    int curroff = 0;
+    for (auto& pkr: pushconst) {
+        pushconstantranges.push_back(pkr);
+        pkr.offset = curroff;
+        curroff += pkr.size;
+    }
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = (uint32_t) desc_layouts.size(),
-        .pSetLayouts = desc_layouts.data()
+        .pSetLayouts = desc_layouts.data(),
+        .pushConstantRangeCount = (uint32_t) pushconst.size(),
+        .pPushConstantRanges = pushconst.data()
     };
 
     VK_ASSERT( vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) );

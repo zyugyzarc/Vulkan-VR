@@ -20,14 +20,14 @@ std::string  _shader_vert_default = SHADERCODE(
     layout (location = 2) in vec2 uv;
 
     layout (location = 0) out vec3 fnorm;
-    layout (location = 1) out vec2 fuv;
+    layout (location = 1) out vec3 fpos;
+    layout (location = 2) out vec2 fuv;
 
     void main() {
         gl_Position = tf.proj * tf.view * tf.model * vec4(pos, 1.)
                     ; // + vec4(0., sin(pos.x * 10 + tf.t * 30) * 0.1, 0., 0.);
         fnorm = (tf.norm * vec4(norm, 1.0)).xyz;
-        // fnorm = norm;
-
+        fpos = pos;
         fuv = uv;
     }
 );
@@ -62,6 +62,65 @@ int main() {
 
     cm::Webcam& probecam = *new cm::Webcam(dev);
     probecam.startStreaming();
+
+//----------------------------------------------//
+//  Roughness Init
+//----------------------------------------------//
+
+    vk::ShaderModule& roughblur_sh = *new vk::ShaderModule(dev, "roughblur.comp",
+    SHADERCODE(
+        layout (binding = 0, rgba8) uniform readonly image2D source;
+        layout (binding = 1, rgba8) uniform           image2D halfway;
+        layout (binding = 2, rgba8) uniform writeonly image2D dest;
+
+        layout (push_constant) uniform config { int rad; } cfg;
+
+        layout(local_size_x = 32, local_size_y = 32) in;
+
+        void main() {
+
+            const ivec2 maxres = ivec2(1024, 512);
+            const int step = 1;
+            
+            ivec2 coord = ivec2(gl_GlobalInvocationID.xy); 
+            vec4 color = vec4(0., 0., 0., 1.);
+            float sc = abs(cfg.rad) * 2 + 1;
+                  sc = float(step) / sc;
+
+            float xstp = float(coord.y) / float(maxres.y);
+                  xstp = (xstp - 0.5) * 2 * 3.14159;
+                  xstp = cos(xstp);
+
+            vec2 dir = cfg.rad > 0 ? vec2(xstp, 0.) : vec2(0., 1.);
+
+            for (int i = -abs(cfg.rad); i <= abs(cfg.rad); i+=step) {
+                vec2 jcoord = vec2(coord) + dir * i;
+                ivec2 icoord;
+                      icoord.x = int(mod(jcoord.x + maxres.x, maxres.x));
+                      icoord.y = int(mod(jcoord.y + maxres.y, maxres.y));
+                if (cfg.rad > 0) {
+                    color.rgb += imageLoad(source, icoord).bgr * sc;
+                } else {
+                    color.rgb += imageLoad(halfway, icoord).bgr * sc;
+                }
+            }
+
+            if (cfg.rad > 0) {
+                imageStore(halfway, coord, color);
+            } else {
+                imageStore(dest, coord, color);
+            }
+
+        }
+    )
+    );
+
+    vk::Pipeline& roughblur = vk::Pipeline::Compute(dev, {{
+        {.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .stageFlags = VK_SHADER_STAGE_ALL},
+        {.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .stageFlags = VK_SHADER_STAGE_ALL},
+        {.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .stageFlags = VK_SHADER_STAGE_ALL}
+    }}, {{VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(int)}},
+    roughblur_sh);
 
 //----------------------------------------------//
 //  Postprocessing Init
@@ -139,14 +198,15 @@ int main() {
     vk::Pipeline& postprocess = vk::Pipeline::Compute(dev, {{
         {.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .stageFlags = VK_SHADER_STAGE_ALL},
         {.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .stageFlags = VK_SHADER_STAGE_ALL}
-    }}, postprocess_sh);
+    }}, {},
+    postprocess_sh);
 
 //----------------------------------------------//
 //  Object/Entity Initialization
 //----------------------------------------------//
 
     // initialize monke
-    // sc::Mesh& monke_mesh = *new sc::Mesh(dev, "suzane.obj");
+    // sc::Mesh& monke_mesh = *new sc::Mesh(dev, "suzane_smooth.obj");
     sc::Mesh& monke_mesh = *new sc::Mesh(dev, "sphere.obj");
 
     sc::Material& monke_mat = *new sc::Material(dev, "default_mat", 
@@ -157,12 +217,14 @@ int main() {
             mat4 norm;
             mat4 view;
             mat4 proj;
+            vec3 camerapos;
             float t;
         } tf;
         layout (set = 0, binding = 1) uniform sampler2D probeimg;
 
         layout (location = 0) in vec3 fnorm;
-        layout (location = 1) in vec2 fuv;
+        layout (location = 1) in vec3 fpos;
+        layout (location = 2) in vec2 fuv;
 
         layout (location = 0) out vec4 col;
 
@@ -171,20 +233,21 @@ int main() {
         }
         
         void main() {
-            float v = fnorm.y; // ah yes, classic lighting
-                               // basically directional light from above
-            // col = vec4(v, v*0.5, v*0.25, 1.0);
             
+            // given the camera direction, we need to find the light direction
+            vec3 cameradir = normalize(tf.camerapos - fpos);
+            vec3 dir = reflect(cameradir, fnorm);
+
             // use spherical coordinates
             // convert normal to a lattitude and longitude
 
             vec2 spcoord = vec2(
-                lerp(atan(fnorm.z, fnorm.x), -3.1415, 3.1415, 0, 1),
-                lerp(-fnorm.y, -1, 1, 0, 1)
+                lerp(atan(dir.z, dir.x), -3.1415, 3.1415, 0, 1),
+                lerp(dir.y, -1, 1, 0, 1)
             );
 
             // rotate the spcoord a little
-            spcoord.x = mod(spcoord.x - 0.25, 1.0);
+            spcoord.x = mod(spcoord.x + 0.25, 1.0);
 
             col = texture(probeimg, spcoord).bgra;
             col.a = 1.f;
@@ -208,7 +271,7 @@ int main() {
     _shader_vert_default,
     SHADERCODE(
         layout (location = 0) in vec3 fnorm;
-        layout (location = 1) in vec2 fuv;
+        layout (location = 2) in vec2 fuv;
 
         layout (location = 0) out vec4 col;
         
@@ -285,6 +348,42 @@ int main() {
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
     });
 
+    // roughblur image
+    // get the camera image and blur (one axis) on it, store that in this image
+    vk::Image& roughblur_im_half = *new vk::Image(dev, {
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = vk_COLOR_FORMAT,
+        .extent = {1024, 512, 1}, // match probeimg format!
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    },  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    roughblur_im_half.view({
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = vk_COLOR_FORMAT,
+        .subresourceRange = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
+    });
+
+    // roughblur image
+    // get the camera image and blur it, store that in this image
+    vk::Image& roughblur_im = *new vk::Image(dev, {
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = vk_COLOR_FORMAT,
+        .extent = {1024, 512, 1}, // match probeimg format!
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    },  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    roughblur_im.view({
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = vk_COLOR_FORMAT,
+        .subresourceRange = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
+    });
+
+    roughblur_im.sampler();
+
     // offscreen image
     // final image, blit this to the output swapchain image
     vk::Image& target_final = *new vk::Image(dev, {
@@ -322,7 +421,6 @@ auto start_time = std::chrono::high_resolution_clock::now();
             .subresourceRange = {
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
         });
-        probeimg.sampler();
 
         // cpu: wait for the thing to be done
         dev.wait(fence_wait_frame);
@@ -351,8 +449,59 @@ auto wait_time = std::chrono::high_resolution_clock::now();
 //  Main - Draw
 //----------------------------------------------//
 
+        // record the commandbuffer for blurring the camera image
+        vk::CommandBuffer& roughblur_cmd = compute.command() << [&](vk::CommandBuffer& cmd) {
+
+            // set the probeimg to be a storage-optimal (read)
+            cmd.imageTransition(probeimg,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
+
+
+            // set the middle to be read and write
+            cmd.imageTransition(roughblur_im_half,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
+
+            // set the roughblur to be storage-optimal (for write)
+            cmd.imageTransition(roughblur_im,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
+
+            // bind the images
+            roughblur.descriptorSet(0);
+            roughblur.writeDescriptor(0, 0, probeimg, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            roughblur.writeDescriptor(0, 1, roughblur_im_half, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            roughblur.writeDescriptor(0, 2, roughblur_im, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+
+            // bind the postprocessor
+            cmd.bindPipeline(roughblur);
+
+            // set the arg
+            cmd.setPcr(roughblur, 0,  -30); // 10px Y-blur
+
+            uint32_t groupCountX = (1920 + 31) / 32;  // Round up division
+            uint32_t groupCountY = (1080 + 31) / 32;
+
+            // apply the shader
+            cmd.dispatch(groupCountX, groupCountY, 1);
+
+            // set the arg
+            cmd.setPcr(roughblur, 0,  30); // 10px X-blur
+            
+            // apply the shader again
+            cmd.dispatch(groupCountX, groupCountY, 1);
+
+        };
+
         // record the commandbuffer for drawing
-        graphics.command() << [&](vk::CommandBuffer& cmd) {
+        vk::CommandBuffer& draw_cmd = graphics.command() << [&](vk::CommandBuffer& cmd) {
             
             // set the draw-raw to be a color-attachment optimal
             cmd.imageTransition(draw_raw,
@@ -371,7 +520,8 @@ auto wait_time = std::chrono::high_resolution_clock::now();
             );
 
             // add camera image as texture
-            cmd.imageTransition(probeimg,
+            cmd.imageTransition(roughblur_im,
+                // VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_IMAGE_ASPECT_COLOR_BIT
@@ -409,7 +559,7 @@ auto wait_time = std::chrono::high_resolution_clock::now();
 
                 monke_mat.descriptorSet(0); // init descriptor set
                 monke.set_transforms(cmd); // writes the transforms into monke_mat (set=0, binding=0)
-                ((vk::Pipeline&)monke_mat).writeDescriptor(0, 1, probeimg, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+                ((vk::Pipeline&)monke_mat).writeDescriptor(0, 1, roughblur_im, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
                 monke_mat.bind(cmd); // bind the pipeline
 
@@ -423,7 +573,7 @@ auto wait_time = std::chrono::high_resolution_clock::now();
             cmd.endRendering();
 
             // set the camera image back to normal
-            cmd.imageTransition(probeimg,
+            cmd.imageTransition(roughblur_im,
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
                 VK_IMAGE_ASPECT_COLOR_BIT
@@ -431,9 +581,8 @@ auto wait_time = std::chrono::high_resolution_clock::now();
 
         };
 
-        // TODO
         // record the commandbuffer for post-processing
-        compute.command() << [&](vk::CommandBuffer& cmd) {
+        vk::CommandBuffer& postproc_cmd = compute.command() << [&](vk::CommandBuffer& cmd) {
 
             // set the draw-raw to be a storage-optimal
             cmd.imageTransition(draw_raw,
@@ -452,11 +601,11 @@ auto wait_time = std::chrono::high_resolution_clock::now();
             // bind the images
             postprocess.descriptorSet(0);
             postprocess.writeDescriptor(0, 0, draw_raw, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-            // postprocess.writeDescriptor(0, 0, probeimg, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            // postprocess.writeDescriptor(0, 0, roughblur_im, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
             postprocess.writeDescriptor(0, 1, target_final, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
             // bind the postprocessor
-            cmd.bindPipeline(postprocess);  
+            cmd.bindPipeline(postprocess);
 
             uint32_t groupCountX = (1920 + 31) / 32;  // Round up division
             uint32_t groupCountY = (1080 + 31) / 32;
@@ -467,7 +616,7 @@ auto wait_time = std::chrono::high_resolution_clock::now();
         };
 
         // record the commandbuffer to blit offscreen rt
-        transfer.command() << [&](vk::CommandBuffer& cmd) {
+        vk::CommandBuffer& blit_cmd = transfer.command() << [&](vk::CommandBuffer& cmd) {
 
             // now set the target_final to be transfer src
             cmd.imageTransition(target_final,
@@ -512,13 +661,16 @@ auto wait_time = std::chrono::high_resolution_clock::now();
         
         // if we assume that we're on an igpu and graphics and compute are on the same qf
 
-        graphics.submit(VK_NULL_HANDLE,
-            {sem_img_avail}, {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT}, {/* auto sync */});
+        compute.submit(roughblur_cmd, VK_NULL_HANDLE,
+            {sem_img_avail}, {VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT}, {/* auto sync */});
 
-        compute.submit(VK_NULL_HANDLE,
+        graphics.submit(draw_cmd, VK_NULL_HANDLE,
             {/*auto sync*/}, {/*auto sync*/}, {/* auto sync */});
 
-        transfer.submit(fence_wait_frame,
+        compute.submit(postproc_cmd, VK_NULL_HANDLE,
+            {/*auto sync*/}, {/*auto sync*/}, {/* auto sync */});
+
+        transfer.submit(blit_cmd, fence_wait_frame,
             {/*auto sync*/}, {/*auto sync*/}, {sem_post_finish});
         
         // throw the image onto the screen

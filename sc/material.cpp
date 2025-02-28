@@ -56,7 +56,7 @@ Material::Material (vk::Device& d, std::string name, std::string vscode, std::st
              {.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}}, // theres the texture
             // single uniform for everything, for now
             // RGB textures in the future
-        },
+        }, {}, // no push constants
         {{ // vertex inputs
             .stride = sizeof(Vertex),
             .rate = VK_VERTEX_INPUT_RATE_VERTEX,

@@ -44,7 +44,7 @@ public:
     ~Queue();   
 
     CommandBuffer& command();
-    void submit(VkFence, std::vector<VkSemaphore>, std::vector<VkPipelineStageFlags>, std::vector<VkSemaphore>);
+    void submit(CommandBuffer&, VkFence, std::vector<VkSemaphore>, std::vector<VkPipelineStageFlags>, std::vector<VkSemaphore>);
     void present(Image&, std::vector<VkSemaphore>);
 
 };
@@ -108,7 +108,11 @@ void Queue::init () {
 
 // return the active command buffer. The command buffer cycles when submit() is called.
 CommandBuffer& Queue::command() {
-    return *cmdbufs_wrap[curr_cmdbuf];
+    // get the active commandbuffer
+    auto ret = cmdbufs_wrap[curr_cmdbuf];
+    // use the next one so you dont have to keep resetting the current cmdbuf
+    curr_cmdbuf = (curr_cmdbuf + 1) % 8;
+    return *ret;
 }
 
 
@@ -117,7 +121,9 @@ CommandBuffer& Queue::command() {
 // waitsems - semaphores to wait on before starting the operation
 // waitstages - stages to wait at on the waitsems
 // signalsems - semaphores to signal once operation is complete
-void Queue::submit(VkFence f, std::vector<VkSemaphore> waitsem, std::vector<VkPipelineStageFlags> waitstage, std::vector<VkSemaphore> signalsem) {
+void Queue::submit(CommandBuffer& cmd, VkFence f, std::vector<VkSemaphore> waitsem, std::vector<VkPipelineStageFlags> waitstage, std::vector<VkSemaphore> signalsem) {
+
+    VkCommandBuffer c = cmd;
 
     VkSubmitInfo submit_info {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -125,15 +131,12 @@ void Queue::submit(VkFence f, std::vector<VkSemaphore> waitsem, std::vector<VkPi
         .pWaitSemaphores = waitsem.data(),
         .pWaitDstStageMask = waitstage.data(),
         .commandBufferCount = 1,
-        .pCommandBuffers = &cmdbufs[curr_cmdbuf],
+        .pCommandBuffers = &c,
         .signalSemaphoreCount = (uint32_t) signalsem.size(),
         .pSignalSemaphores = signalsem.data()
     };
 
     VK_ASSERT( vkQueueSubmit(queue, 1, &submit_info, f));
-
-    // ues the next one so you dont have to keep resetting the current cmdbuf
-    curr_cmdbuf = (curr_cmdbuf + 1) % 8;
 }
 
 // submits the image fetched by `Device::getSwapchainImage()` to the 

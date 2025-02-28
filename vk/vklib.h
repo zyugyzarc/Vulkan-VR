@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <string>
+#include <bit>
 
 #include "instance.cpp"
 #include "device.cpp"

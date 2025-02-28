@@ -36,7 +36,7 @@ public:
     // Records a CommandBuffer.
     // func should be a callable that takes a CommandBuffer& as an argument.
     template <typename func_t>
-    void operator<< (func_t func);
+    CommandBuffer& operator<< (func_t func);
 
     // mirrors vkCmdBeginRendering.
     // takes in a list of attachments.
@@ -48,6 +48,12 @@ public:
 
     // mirrors vkCmdBindPipeline
     void bindPipeline(Pipeline&);
+
+    // mirrors vkCmdPushConstants
+    void setPcrData(Pipeline&, int, void*);
+
+    template <typename T>
+    void setPcr(Pipeline&, int, T);
 
     // mirrors vkCmdBindVertexBuffers
     void bindVertexInput(std::vector<Buffer*>);
@@ -88,7 +94,7 @@ void _VkAssert (VkResult res, std::string file, int line);
 
 // Records a CommandBuffer
 template <typename func_t>
-void CommandBuffer::operator<< (func_t func) {  // note: for some reason the template function needs to be in the header file
+CommandBuffer& CommandBuffer::operator<< (func_t func) {  // note: for some reason the template function needs to be in the header file
 
     // wipe the commandbuffer
     vkResetCommandBuffer(cmd, 0);
@@ -102,7 +108,13 @@ void CommandBuffer::operator<< (func_t func) {  // note: for some reason the tem
 
     // stop recording
     VK_ASSERT( vkEndCommandBuffer(cmd) );
+    return *this;
 };
+
+template <typename T>
+void CommandBuffer::setPcr(Pipeline& p, int i , T d) {
+    setPcrData(p, i, &d);
+}
 
 }; // end of instance.h file
 #ifndef HEADER
@@ -198,6 +210,12 @@ void CommandBuffer::bindVertexInput(std::vector<Buffer*> bufs){
     }
 
     vkCmdBindVertexBuffers(cmd, 0, bufs.size(), vbufs.data(), offsets.data());
+}
+
+// vkCmdPushConstants
+void CommandBuffer::setPcrData(Pipeline& pipe, int index, void* data) {
+    VkPushConstantRange pc = pipe._getpcr()[index];
+    vkCmdPushConstants(cmd, pipe, pc.stageFlags, pc.offset, pc.size, data);
 }
 
 // vkCmdBindIndexBuffer
