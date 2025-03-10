@@ -1,66 +1,6 @@
-#ifndef INSTANCE_CPP
-#define INSTANCE_CPP
-
-#define GLFW_INCLUDE_VULKAN
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-#include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
-#include <string>
-
-#define vk_COLOR_FORMAT VK_FORMAT_B8G8R8A8_UNORM
-#define vk_DEPTH_FORMAT VK_FORMAT_D32_SFLOAT
+#include "instance.h"
 
 namespace vk {
-
-// A vk::Instance wraps a VkInstance, a GLFWWindow and a VkSurfaceKHR.
-// Upon initiazation, automatically constructs the required resources.
-// (tries to) Open the window in fullscreen, on the last (secondary) monitor,
-// with no window decoration.
-class Instance {
-
-    GLFWwindow* window;
-    VkInstance instance;
-    VkSurfaceKHR surface;
-
-public:
-    // sole constructor
-    Instance(std::string, int, int);
-    ~Instance();
-
-    // other args (dont modify pls)
-    uint32_t width;
-    uint32_t height;
-
-    // updates the screen:
-    // polls GLFW events and handles window events
-    bool update();
-
-    // getters
-    operator VkSurfaceKHR() const {return surface;}
-    operator VkInstance() const {return instance;}
-    operator GLFWwindow*() const {return window;}
-};
-
-}; // end of instance.h file
-#ifndef HEADER
-
-#include <stdexcept>
-#include <string>
-#include <vector>
-#include <vulkan/vk_enum_string_helper.h>
-
-namespace vk {
-#define VK_ASSERT(x) { _VkAssert(x, __FILE__, __LINE__); }
-
-inline void _VkAssert (VkResult res, std::string file, int line) {
-    if (res != VK_SUCCESS)
-        throw std::runtime_error( 
-            std::string(string_VkResult(res))
-         + " at "
-         + file + ":"
-         + std::to_string(line)
-    );
-}
 
 // sole constructor
 // creates a window, vkinstance, and a VkSurfaceKHR
@@ -155,5 +95,3 @@ Instance::~Instance () {
 }
 
 };
-#endif
-#endif

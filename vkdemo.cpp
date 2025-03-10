@@ -206,8 +206,8 @@ int main() {
 //----------------------------------------------//
 
     // initialize monke
-    // sc::Mesh& monke_mesh = *new sc::Mesh(dev, "suzane_smooth.obj");
-    sc::Mesh& monke_mesh = *new sc::Mesh(dev, "sphere.obj");
+    sc::Mesh& monke_mesh = *new sc::Mesh(dev, "suzane_smooth.obj");
+    // sc::Mesh& monke_mesh = *new sc::Mesh(dev, "sphere.obj");
 
     sc::Material& monke_mat = *new sc::Material(dev, "default_mat", 
     _shader_vert_default,
@@ -484,7 +484,7 @@ auto wait_time = std::chrono::high_resolution_clock::now();
             cmd.bindPipeline(roughblur);
 
             // set the arg
-            cmd.setPcr(roughblur, 0,  -30); // 10px Y-blur
+            cmd.setPcr(roughblur, 0,  -1); // 10px Y-blur
 
             uint32_t groupCountX = (1920 + 31) / 32;  // Round up division
             uint32_t groupCountY = (1080 + 31) / 32;
@@ -493,7 +493,7 @@ auto wait_time = std::chrono::high_resolution_clock::now();
             cmd.dispatch(groupCountX, groupCountY, 1);
 
             // set the arg
-            cmd.setPcr(roughblur, 0,  30); // 10px X-blur
+            cmd.setPcr(roughblur, 0,  1); // 10px X-blur
             
             // apply the shader again
             cmd.dispatch(groupCountX, groupCountY, 1);

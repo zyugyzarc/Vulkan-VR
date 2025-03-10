@@ -32,10 +32,6 @@ TARGET = vkdemo
 # Default rule
 all: $(TARGET) # clean
 
-# Rule for compiling vkdemo.cpp with -DHEADER
-vkdemo.o: vkdemo.cpp
-	$(CXX) $(CFLAGS) -c -o $@ $< -DHEADER
-
 # Rule for compiling other .cpp files
 %.o: %.cpp
 	$(CXX) $(CFLAGS) -c -o $@ $<

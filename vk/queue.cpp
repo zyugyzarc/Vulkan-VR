@@ -1,74 +1,6 @@
-#ifndef QUEUE_CPP
-#define QUEUE_CPP
-
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-#include <vector>
-
-#ifndef HEADER
-    #define HEADER
-    #include "device.cpp"
-    #include "commandbuffer.cpp"
-    #include "image.cpp"
-    #undef HEADER
-#else
-    namespace vk {
-        class Device;
-        class CommandBuffer;
-        class Image;
-    };
-#endif
+#include "queue.h"
 
 namespace vk {
-
-// A queue wraps a VkQueue, and
-// abstract CommandPools and CommandBuffers.
-// A Queue is constructed from Device::create_queue()
-// and is "valid" when Device::init() is called.
-class Queue {
-
-    uint32_t family;
-    VkQueue queue;
-    Device& dev;
-
-    VkCommandPool cmdPool;
-    std::vector<VkCommandBuffer> cmdbufs;
-    std::vector<CommandBuffer*> cmdbufs_wrap;
-    uint32_t curr_cmdbuf = 0;
-
-    friend class Device;
-    void init();
-    Queue(Device&, uint32_t);
-
-public:
-    ~Queue();   
-
-    CommandBuffer& command();
-    void submit(CommandBuffer&, VkFence, std::vector<VkSemaphore>, std::vector<VkPipelineStageFlags>, std::vector<VkSemaphore>);
-    void present(Image&, std::vector<VkSemaphore>);
-
-};
-
-
-}; // end of instance.h file
-#ifndef HEADER
-
-#include <stdexcept>
-#include <vector>
-#include <vulkan/vk_enum_string_helper.h>
-
-namespace vk {
-#define VK_ASSERT(x) { _VkAssert(x, __FILE__, __LINE__); }
-
-inline void _VkAssert (VkResult res, std::string file, int line) {
-    if (res != VK_SUCCESS)
-        throw std::runtime_error( 
-            std::string(string_VkResult(res))
-         + " at "
-         + file + ":"
-         + std::to_string(line)
-    );
-}
 
 // constructor - everything is late initalization in Queue::init()
 Queue::Queue (Device& d, uint32_t qf) : dev(d), family(qf) {}
@@ -166,5 +98,3 @@ Queue::~Queue () {
 }
 
 };
-#endif
-#endif

@@ -5,17 +5,22 @@
 #ifndef VKLIB_H
 #define VKLIB_H
 
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
 #include <vector>
 #include <string>
 #include <bit>
 
-#include "instance.cpp"
-#include "device.cpp"
-#include "queue.cpp"
-#include "shadermodule.cpp"
-#include "image.cpp"
-#include "commandbuffer.cpp"
-#include "buffer.cpp"
-#include "pipeline.cpp"
+#include "vkassert.h"
+
+#include "instance.h"
+#include "device.h"
+#include "queue.h"
+#include "shadermodule.h"
+#include "image.h"
+#include "commandbuffer.h"
+#include "buffer.h"
+#include "pipeline.h"
 
 #endif
