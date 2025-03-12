@@ -161,7 +161,7 @@ void Device::createswapchain() {
     };
 
     // should query vkGetPhysicalDeviceSurfaceCapabilitiesKHR, but 2 should be good enough
-    uint32_t imageCount = capabilities.minImageCount + 1;
+    uint32_t imageCount = 8; //capabilities.minImageCount + 1;
 
     VkSwapchainCreateInfoKHR createInfo {
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,

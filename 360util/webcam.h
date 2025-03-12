@@ -13,12 +13,12 @@
 
 #ifndef HEADER
     #define HEADER
-        #include "../vk/device.cpp"
-        #include "../vk/image.cpp"
+        #include "../vk/device.h"
+        #include "../vk/image.h"
     #undef HEADER
 #else
-    #include "../vk/device.cpp"
-    #include "../vk/image.cpp"
+    #include "../vk/device.h"
+    #include "../vk/image.h"
 #endif
 
 namespace cm {
@@ -33,6 +33,8 @@ public:
     vk::Image& getNextImage();
 
     static constexpr size_t BUFFER_SIZE = 5;  // Ring buffer size
+
+    std::vector<VkImageView> allimageviews();
 
 private:
     void fetchFrames();  // Background thread function

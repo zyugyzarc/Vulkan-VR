@@ -7,7 +7,7 @@ void Pipeline::init_graphics (
     std::vector<std::vector<VkDescriptorSetLayoutBinding>> descriptorsets,
     std::vector<VkPushConstantRange> pushconst,
     std::vector<struct VertexInputBinding> vertex_input, ShaderModule& vert,
-    std::vector<VkFormat> attachment_col, VkFormat attachment_depth, ShaderModule& frag
+    RenderPass& pass, ShaderModule& frag
 ) {
 
     // use default values for the states
@@ -68,7 +68,7 @@ void Pipeline::init_graphics (
     };
     
     std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments;
-    for (int i = 0; i < attachment_col.size(); i++) {
+    for (int i = 0; i < pass.num_col_attachments(); i++) {
         colorBlendAttachments.push_back(colorBlendAttachment);
     }
 
@@ -179,19 +179,20 @@ void Pipeline::init_graphics (
     };
 
     // the part where you add attachments
-    VkPipelineRenderingCreateInfoKHR pipeline_rendering_create_info {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
-        .colorAttachmentCount = (uint32_t) attachment_col.size(),
-        .pColorAttachmentFormats = attachment_col.data(),
-    .depthAttachmentFormat = attachment_depth
-    };
+    // note: use a renderpass!
+    // VkPipelineRenderingCreateInfoKHR pipeline_rendering_create_info {
+    //     .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
+    //     .colorAttachmentCount = (uint32_t) attachment_col.size(),
+    //     .pColorAttachmentFormats = attachment_col.data(),
+    // .depthAttachmentFormat = attachment_depth
+    // };
 
     // check if depth is available and update this
     VkPipelineDepthStencilStateCreateInfo depthstencil {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-        .depthTestEnable = attachment_depth == VK_FORMAT_UNDEFINED ? VK_FALSE : VK_TRUE,
-        .depthWriteEnable = attachment_depth == VK_FORMAT_UNDEFINED ? VK_FALSE : VK_TRUE,
-        .depthCompareOp = attachment_depth == VK_FORMAT_UNDEFINED ? VK_COMPARE_OP_ALWAYS : VK_COMPARE_OP_LESS,
+        .depthTestEnable = pass.has_depth() ? VK_TRUE : VK_FALSE,
+        .depthWriteEnable = pass.has_depth() ? VK_TRUE : VK_FALSE,
+        .depthCompareOp = pass.has_depth() ? VK_COMPARE_OP_LESS : VK_COMPARE_OP_ALWAYS,
         .depthBoundsTestEnable = VK_FALSE,
         .stencilTestEnable = VK_FALSE
     };
@@ -199,7 +200,7 @@ void Pipeline::init_graphics (
     // finally, create the pipeline
     VkGraphicsPipelineCreateInfo pipelineInfo {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext = &pipeline_rendering_create_info,
+        .pNext = nullptr,
         .stageCount = 2,
         .pStages = shaderStages,
         .pVertexInputState = &vertexInputInfo,
@@ -211,6 +212,8 @@ void Pipeline::init_graphics (
         .pColorBlendState = &colorBlending,
         .pDynamicState = &dynamicState,
         .layout = pipelineLayout,
+        .renderPass = (VkRenderPass) pass,
+        .subpass = 0
     };
 
     vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline);

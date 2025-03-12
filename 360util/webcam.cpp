@@ -156,4 +156,15 @@ void Webcam::fetchFrames() {
     curl_easy_cleanup(curl);
 }
 
+std::vector<VkImageView> Webcam::allimageviews() {
+    
+    std::vector<VkImageView> rt;
+    
+    for (auto& img : imageBuffer) {
+        rt.push_back((VkImageView) img);
+    }
+
+    return rt;
+}
+
 };

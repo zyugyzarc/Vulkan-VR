@@ -16,6 +16,7 @@ SRCS =  \
 	vk/pipeline.cpp\
 	vk/commandbuffer.cpp\
 	vk/buffer.cpp\
+	vk/renderpass.cpp\
 	\
 	sc/mesh.cpp\
 	sc/material.cpp\

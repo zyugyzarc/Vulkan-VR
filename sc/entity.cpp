@@ -1,12 +1,6 @@
 #ifndef ENTITY_CPP
 #define ENTITY_CPP
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
-#include <glm/gtc/quaternion.hpp>
-#include <glm/gtc/matrix_transform.hpp> 
-
 #ifndef HEADER
     #define HEADER
     #include "../vk/vklib.h"
@@ -16,6 +10,8 @@
     #undef HEADER
 #endif
 
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/matrix_transform.hpp> 
 
 namespace sc {
 

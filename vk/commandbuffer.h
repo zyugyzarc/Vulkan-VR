@@ -7,6 +7,7 @@ namespace vk{
 
 class Pipeline;
 class Buffer;
+class RenderPass;
     
 // Wraps a VkCommandBuffer.
 // Allocation is handled by Queue.
@@ -26,8 +27,14 @@ public:
 
     // mirrors vkCmdBeginRendering.
     // takes in a list of attachments.
-    void beginRendering(std::vector<VkRenderingAttachmentInfo> attachment_col,
-                        VkRenderingAttachmentInfo attachment_depth, VkRect2D area);
+    // void beginRendering(std::vector<VkRenderingAttachmentInfo> attachment_col,
+    //                     VkRenderingAttachmentInfo attachment_depth, VkRect2D area);
+
+    // mirrors vkCmdBeginRenderPass
+    void beginRenderpass(RenderPass&, VkRect2D, std::vector<VkClearValue>);
+
+    // mirrors vkCmdEndRenderPass
+    void endRenderpass(RenderPass&);
 
     // mirrors vkCmdEndRendering
     void endRendering();

@@ -9,6 +9,7 @@ class Device;
 class ShaderModule;
 class Buffer;
 class Image;
+class RenderPass;
 
 // constant
 const int _p_res_count = 2;
@@ -43,7 +44,7 @@ class Pipeline {
     Pipeline(Device& d) : device(d) {}
     
     void init_graphics(std::vector<std::vector<VkDescriptorSetLayoutBinding>>, std::vector<VkPushConstantRange>, std::vector<struct VertexInputBinding>,
-                        ShaderModule&, std::vector<VkFormat>, VkFormat, ShaderModule&);
+                        ShaderModule&, RenderPass&, ShaderModule&);
 
     void init_compute(std::vector<std::vector<VkDescriptorSetLayoutBinding>>, std::vector<VkPushConstantRange>, ShaderModule&);
 
@@ -54,7 +55,7 @@ public:
         Device& d,
         std::vector<std::vector<VkDescriptorSetLayoutBinding>> descriptors, std::vector<VkPushConstantRange> pushconst,
         std::vector<struct VertexInputBinding> vertex_input, ShaderModule& v,
-        std::vector<VkFormat> attachment_col, VkFormat attachment_depth, ShaderModule& f
+        RenderPass& r, ShaderModule& f
     ) {
         Pipeline* p = new Pipeline(d);
         p->type = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -62,7 +63,7 @@ public:
         p->init_graphics(
             descriptors, pushconst,
             vertex_input, v,
-            attachment_col, attachment_depth, f
+            r, f
         );
 
         return *p;

@@ -4,25 +4,41 @@
 namespace vk {
 
 // vkCmdBeginRendering
-void CommandBuffer::beginRendering (std::vector<VkRenderingAttachmentInfo> attachment_col,
-                                    VkRenderingAttachmentInfo attachment_depth,
-                                    VkRect2D area) {
+// void CommandBuffer::beginRendering (std::vector<VkRenderingAttachmentInfo> attachment_col,
+//                                     VkRenderingAttachmentInfo attachment_depth,
+//                                     VkRect2D area) {
                                         
-    for (auto& i : attachment_col) {
-        i.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    }
-    attachment_depth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+//     for (auto& i : attachment_col) {
+//         i.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+//     }
+//     attachment_depth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
 
-    VkRenderingInfo renderInfo {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
+//     VkRenderingInfo renderInfo {
+//         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
+//         .renderArea = area,
+//         .layerCount = 1,
+//         .colorAttachmentCount = (uint32_t) attachment_col.size(),
+//         .pColorAttachments = attachment_col.data(),
+//         .pDepthAttachment = attachment_depth.imageView == VK_NULL_HANDLE ? nullptr : &attachment_depth,
+//     };
+
+//     vkCmdBeginRendering(cmd, &renderInfo);
+// }
+
+void CommandBuffer::beginRenderpass (RenderPass& r, VkRect2D area, std::vector<VkClearValue> clear) {
+    VkRenderPassBeginInfo renderpassInfo {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = r,
+        .framebuffer = r.get_current_fb(),
         .renderArea = area,
-        .layerCount = 1,
-        .colorAttachmentCount = (uint32_t) attachment_col.size(),
-        .pColorAttachments = attachment_col.data(),
-        .pDepthAttachment = attachment_depth.imageView == VK_NULL_HANDLE ? nullptr : &attachment_depth,
+        .clearValueCount = (uint32_t) clear.size(),
+        .pClearValues = clear.data()
     };
+    vkCmdBeginRenderPass(cmd, &renderpassInfo, VK_SUBPASS_CONTENTS_INLINE);
+}
 
-    vkCmdBeginRendering(cmd, &renderInfo);
+void CommandBuffer::endRenderpass(RenderPass& r) {
+    vkCmdEndRenderPass(cmd);
 }
 
 void CommandBuffer::imageTransition(

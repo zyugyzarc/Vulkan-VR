@@ -1,9 +1,6 @@
 #ifndef MATERIAL_CPP
 #define MATERIAL_CPP
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
 #ifndef HEADER
     #define HEADER
     #include "../vk/vklib.h"
@@ -29,7 +26,7 @@ class Material {
     vk::ShaderModule* fs;
 
 public:
-    Material(vk::Device& d, std::string name, std::string vscode, std::string fscode);
+    Material(vk::Device& d, vk::RenderPass& pass, std::string name, std::string vscode, std::string fscode);
     ~Material();
 
     void bind(vk::CommandBuffer&);
@@ -44,7 +41,7 @@ public:
 #ifndef HEADER
 namespace sc {
 
-Material::Material (vk::Device& d, std::string name, std::string vscode, std::string fscode): device(d) {
+Material::Material (vk::Device& d, vk::RenderPass& pass, std::string name, std::string vscode, std::string fscode): device(d) {
 
     vs = new vk::ShaderModule(d, "_"+name+".vert", vscode),
     fs = new vk::ShaderModule(d, "_"+name+".frag", fscode),
@@ -53,7 +50,8 @@ Material::Material (vk::Device& d, std::string name, std::string vscode, std::st
         d, 
         { // descriptor inputs
             {{.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .stageFlags = VK_SHADER_STAGE_ALL},
-             {.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}}, // theres the texture
+             {.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT},  // theres the texture
+             {.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}}, // theres the texture again
             // single uniform for everything, for now
             // RGB textures in the future
         }, {}, // no push constants
@@ -66,7 +64,7 @@ Material::Material (vk::Device& d, std::string name, std::string vscode, std::st
                 {.format=VK_FORMAT_R32G32_SFLOAT,    .offset=offsetof(Vertex, uv)},  // texture coords
             }
         }},
-        *vs, {vk_COLOR_FORMAT}, vk_DEPTH_FORMAT, *fs
+        *vs, pass, *fs
     );
 
     if (pipe == nullptr) {

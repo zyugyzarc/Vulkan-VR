@@ -21,6 +21,7 @@ class Instance {
 public:
     // sole constructor
     Instance(std::string, int, int);
+    Instance(nullptr_t) {} // dummy constructor for xr
     ~Instance();
 
     // other args (dont modify pls)
